@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Despatch Performance Control Board</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;650&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #12161b;
+  --panel: #1a2029;
+  --panel-2: #1f2630;
+  --border: #2a323d;
+  --text: #e8ecf0;
+  --text-dim: #8892a0;
+  --text-faint: #5c6673;
+  --teal: #35b8a6;
+  --amber: #e0a13a;
+  --red: #dd5c52;
+  --blue: #5090d3;
+  --violet: #a687da;
+  --green: #6ebd7f;
+  font-size: 16px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f2f0eb;
+    --panel: #ffffff;
+    --panel-2: #f7f5f0;
+    --border: #ddd8cd;
+    --text: #23262b;
+    --text-dim: #63707a;
+    --text-faint: #97a1a8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161b;
+  --panel: #1a2029;
+  --panel-2: #1f2630;
+  --border: #2a323d;
+  --text: #e8ecf0;
+  --text-dim: #8892a0;
+  --text-faint: #5c6673;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  height: 100%;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  min-height: 100%;
+}
+.mono { font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace; }
+
+a { color: var(--teal); }
+
+/* ---------- Layout shell ---------- */
+.wrap {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 28px 20px 80px;
+}
+
+header.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.brand h1 {
+  margin: 0 0 4px;
+  font-size: 1.55rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.brand p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  max-width: 46ch;
+}
+.brand .tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  color: var(--teal);
+  background: rgba(53,184,166,0.12);
+  border: 1px solid rgba(53,184,166,0.3);
+  border-radius: 3px;
+  padding: 1px 7px;
+  margin-bottom: 8px;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.datebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.datebar label { font-size: 0.72rem; color: var(--text-dim); }
+.datebar input[type=date] {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+}
+.presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.presets button, .reset-btn {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.presets button:hover, .reset-btn:hover { color: var(--text); border-color: var(--text-faint); }
+.presets button.active { color: var(--bg); background: var(--teal); border-color: var(--teal); font-weight: 600; }
+
+/* ---------- KPI strip ---------- */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 26px;
+}
+.kpi {
+  background: var(--panel);
+  padding: 14px 14px 12px;
+  min-width: 0;
+}
+.kpi .num {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi .lbl {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  margin-top: 5px;
+  line-height: 1.3;
+}
+.kpi .sub { font-size: 0.66rem; color: var(--text-faint); margin-top: 2px; }
+.kpi.teal .num { color: var(--teal); }
+.kpi.amber .num { color: var(--amber); }
+.kpi.red .num { color: var(--red); }
+.kpi.blue .num { color: var(--blue); }
+.kpi.violet .num { color: var(--violet); }
+
+@media (max-width: 1180px) {
+  .kpi-strip { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 620px) {
+  .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---------- Tabs ---------- */
+.tabbar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 22px;
+  overflow-x: auto;
+}
+.tabbar button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.tabbar button:hover { color: var(--text); }
+.tabbar button.active { color: var(--text); border-bottom-color: var(--teal); font-weight: 600; }
+
+.tabpanel { display: none; }
+.tabpanel.active { display: block; }
+
+/* ---------- Panels / cards ---------- */
+.grid { display: grid; gap: 16px; }
+.grid.cols-2 { grid-template-columns: 1.3fr 1fr; }
+.grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 900px) {
+  .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px 18px;
+}
+.panel h3 {
+  margin: 0 0 2px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.panel .desc {
+  margin: 0 0 12px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.chart-box { position: relative; width: 100%; }
+.chart-box.h260 { height: 260px; }
+.chart-box.h320 { height: 320px; }
+.chart-box.h360 { height: 360px; }
+
+/* ---------- Tables ---------- */
+.table-scroll { overflow-x: auto; }
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+table.data th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 0.7rem;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  cursor: pointer;
+  white-space: nowrap;
+}
+table.data th:hover { color: var(--text); }
+table.data th .arrow { opacity: 0.5; font-size: 0.65em; margin-left: 3px; }
+table.data td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+table.data tbody tr:hover { background: var(--panel-2); }
+table.data td.num, table.data th.num { font-family: "IBM Plex Mono", monospace; text-align: right; }
+.scroll-tbl { max-height: 420px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.scroll-tbl table.data th { top: 0; }
+
+.pill {
+  display: inline-block;
+  font-size: 0.68rem;
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-family: "IBM Plex Mono", monospace;
+}
+.pill.am { background: rgba(80,144,211,0.15); color: var(--blue); }
+.pill.pm { background: rgba(224,161,58,0.15); color: var(--amber); }
+.pill.night { background: rgba(166,135,218,0.15); color: var(--violet); }
+.pill.agency { background: rgba(221,92,82,0.15); color: var(--red); }
+.pill.unknown { background: rgba(140,146,160,0.15); color: var(--text-dim); }
+
+.bar-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 0.78rem; }
+.bar-row .name { width: 190px; flex-shrink: 0; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-row .track { flex: 1; background: var(--panel-2); border-radius: 3px; height: 16px; overflow: hidden; }
+.bar-row .fill { height: 100%; border-radius: 3px; }
+.bar-row .val { width: 70px; text-align: right; font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; color: var(--text-dim); flex-shrink: 0; }
+
+/* ---------- Filters row ---------- */
+.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.filters select, .filters input[type=text] {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 9px;
+  font-size: 0.78rem;
+  font-family: inherit;
+}
+.filters input[type=text] { min-width: 200px; }
+.filters .count { font-size: 0.75rem; color: var(--text-faint); margin-left: auto; }
+
+/* ---------- Modal ---------- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(8,10,13,0.72);
+  display: none; align-items: flex-start; justify-content: center;
+  z-index: 50; padding: 40px 16px; overflow-y: auto;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  max-width: 780px; width: 100%; padding: 22px 24px 26px; position: relative;
+}
+.modal .close {
+  position: absolute; top: 14px; right: 16px; background: none; border: none;
+  color: var(--text-dim); font-size: 1.3rem; cursor: pointer; line-height: 1;
+}
+.modal .close:hover { color: var(--text); }
+.modal h2 { margin: 0 0 2px; font-size: 1.15rem; }
+.modal .modal-sub { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 16px; }
+.modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+@media (max-width: 640px) { .modal-grid { grid-template-columns: 1fr; } }
+.modal-stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.modal-stat .num { font-family: "IBM Plex Mono", monospace; font-size: 1.15rem; font-weight: 600; }
+.modal-stat .lbl { font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; }
+.modal-section { margin-top: 14px; }
+.modal-section h4 { font-size: 0.78rem; text-transform: none; color: var(--text-dim); margin: 0 0 8px; font-weight: 600; }
+.evt-item {
+  border-left: 3px solid var(--red); background: var(--panel-2); border-radius: 0 5px 5px 0;
+  padding: 7px 10px; margin-bottom: 6px; font-size: 0.78rem;
+}
+.evt-item .meta { color: var(--text-dim); font-size: 0.7rem; margin-bottom: 2px; }
+.hint-click { font-size: 0.68rem; color: var(--text-faint); margin-top: 6px; }
+
+/* ---------- Data source panel (manual fallback) ---------- */
+.datasrc {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  margin-bottom: 22px;
+  overflow: hidden;
+}
+.datasrc summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+.datasrc summary::-webkit-details-marker { display: none; }
+.datasrc summary .chev { transition: transform 0.15s; font-size: 0.7rem; color: var(--text-faint); }
+.datasrc[open] summary .chev { transform: rotate(90deg); }
+.datasrc summary .badge {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.65rem;
+  padding: 1px 7px;
+  border-radius: 3px;
+  background: rgba(53,184,166,0.12);
+  color: var(--teal);
+  border: 1px solid rgba(53,184,166,0.3);
+}
+.datasrc summary .badge.demo {
+  background: rgba(224,161,58,0.12);
+  color: var(--amber);
+  border-color: rgba(224,161,58,0.3);
+}
+.datasrc-body { padding: 4px 16px 18px; }
+.datasrc-body p.desc { margin: 0 0 14px; font-size: 0.75rem; color: var(--text-dim); }
+.upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+@media (max-width: 760px) { .upload-grid { grid-template-columns: 1fr; } }
+.upload-slot {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+}
+.upload-slot label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.upload-slot .hint { font-size: 0.68rem; color: var(--text-faint); margin-bottom: 7px; }
+.upload-slot input[type=file] {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  max-width: 100%;
+}
+.upload-slot .filename { font-size: 0.7rem; color: var(--teal); margin-top: 4px; font-family: "IBM Plex Mono", monospace; word-break: break-all; }
+.datasrc-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.btn {
+  background: var(--teal);
+  color: var(--bg);
+  border: none;
+  border-radius: 5px;
+  padding: 8px 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.secondary { background: var(--panel-2); color: var(--text-dim); border: 1px solid var(--border); }
+.datasrc-status { font-size: 0.75rem; margin-top: 10px; min-height: 1.2em; }
+.datasrc-status.ok { color: var(--teal); }
+.datasrc-status.err { color: var(--red); }
+.datasrc-status.busy { color: var(--text-dim); }
+
+.notice {
+  background: rgba(224,161,58,0.10);
+  border: 1px solid rgba(224,161,58,0.45);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.notice.err { background: rgba(221,92,82,0.10); border-color: rgba(221,92,82,0.5); }
+.notice button { margin-left: 8px; }
+.repo-status { font-size: 0.75rem; margin: -10px 0 18px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+footer.foot {
+  margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border);
+  color: var(--text-faint); font-size: 0.72rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <span class="tag">Warehouse operations</span>
+      <h1>Despatch Performance Control Board</h1>
+      <p>Order fulfilment, labour hours and floor issues in one view — filter the date range below or click any day to see everything that happened on it.</p>
+    </div>
+    <div class="datebar">
+      <div class="presets" id="presetsContainer"></div>
+      <label>From <input type="date" id="startDate"></label>
+      <label>To <input type="date" id="endDate"></label>
+    </div>
+  </header>
+
+  <!-- Manual upload: hidden unless the repository files cannot be loaded -->
+  <details class="datasrc" id="datasrcPanel" style="display:none">
+    <summary><span class="chev">▶</span> Manual data upload <span class="badge demo" id="dataBadge">No data</span></summary>
+    <div class="datasrc-body">
+      <p class="desc">The dashboard normally loads the Excel files from the repository automatically. If that failed (for example the page was opened as a local file), select the workbooks here instead. Everything is parsed in your browser — nothing is uploaded anywhere.</p>
+      <div class="upload-grid">
+        <div class="upload-slot">
+          <label for="fileHours">Daily Hours workbook</label>
+          <div class="hint">"Staffing 2026" + "Orders &amp; Pallets" sheets — labour hours and despatch volumes</div>
+          <input type="file" id="fileHours" accept=".xlsx,.xls">
+          <div class="filename" id="fileHoursName"></div>
+        </div>
+        <div class="upload-slot">
+          <label for="fileEvents">Daily Labour Events &amp; Issues workbook</label>
+          <div class="hint">"Daily Events" sheet — the floor issue log</div>
+          <input type="file" id="fileEvents" accept=".xlsx,.xls">
+          <div class="filename" id="fileEventsName"></div>
+        </div>
+        <div class="upload-slot">
+          <label for="filePickers">Picker Tracker workbook</label>
+          <div class="hint">"Master data" + "Sheet1" — picker actual vs target, any date range</div>
+          <input type="file" id="filePickers" accept=".xlsx,.xls">
+          <div class="filename" id="filePickersName"></div>
+        </div>
+        <div class="upload-slot">
+          <label for="fileShortages">Shortages workbook</label>
+          <div class="hint">"Export" sheet — case shortages by delivery</div>
+          <input type="file" id="fileShortages" accept=".xlsx,.xls">
+          <div class="filename" id="fileShortagesName"></div>
+        </div>
+      </div>
+      <div class="datasrc-actions">
+        <button class="btn" id="processFilesBtn">Load selected files</button>
+        <button class="btn secondary" id="retryRepoBtn">Retry loading from repository</button>
+      </div>
+      <div class="datasrc-status" id="datasrcStatus"></div>
+    </div>
+  </details>
+
+  <div class="repo-status datasrc-status busy" id="repoStatus">Loading data from repository…</div>
+
+  <div id="kpiStrip" class="kpi-strip"></div>
+
+  <nav class="tabbar">
+    <button data-tab="overview" class="active">Overview</button>
+    <button data-tab="fulfilment">Order fulfilment</button>
+    <button data-tab="labour">Labour &amp; staffing</button>
+    <button data-tab="issues">Issues log</button>
+    <button data-tab="shortages">Shortages</button>
+    <button data-tab="pickers">Picker performance</button>
+  </nav>
+
+  <!-- ===== OVERVIEW ===== -->
+  <section id="tab-overview" class="tabpanel active">
+    <div class="panel" style="margin-bottom:16px;">
+      <h3>Despatch, overtime &amp; issues, day by day</h3>
+      <p class="desc">Pallets despatched (bars) against overtime hours and issues logged (lines). Click any day to open its full detail.</p>
+      <div class="chart-box h360"><canvas id="trendChart"></canvas></div>
+    </div>
+    <div class="grid cols-2">
+      <div class="panel">
+        <h3>Where the hours go missing</h3>
+        <p class="desc">Total hours lost by issue type, ranked highest impact first.</p>
+        <div class="chart-box h320"><canvas id="paretoOverviewChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3>Worst-affected days</h3>
+        <p class="desc">Ranked by hours lost to logged issues. Click a day for the full picture.</p>
+        <div id="worstDaysList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FULFILMENT ===== -->
+  <section id="tab-fulfilment" class="tabpanel">
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="filters" style="justify-content:space-between; align-items:flex-start;">
+        <div>
+          <h3>Fulfilment by period</h3>
+          <p class="desc" style="margin:0;">For each day, week, month or year: what was ordered, what went short, which issues hit, and how many people and hours it took to get it out. Click a bar or row for the full breakdown.</p>
+        </div>
+        <div class="presets" id="granButtons">
+          <button data-gran="day" class="active">Day</button>
+          <button data-gran="week">Week</button>
+          <button data-gran="month">Month</button>
+          <button data-gran="year">Year</button>
+        </div>
+      </div>
+      <div class="chart-box h360"><canvas id="fulfilTrendChart"></canvas></div>
+    </div>
+    <div class="panel" style="margin-bottom:16px;">
+      <h3>Period log</h3>
+      <p class="desc">Weeks run Monday–Sunday. Hours worked = actual + agency + salaried hours (holiday and sickness excluded). "Est. pallets short" converts units short into pallets using that period's average units per pallet. Units/hr and Pallets/hr use only days that have order data.</p>
+      <div class="table-scroll scroll-tbl" style="max-height:520px;">
+        <table class="data" id="fulfilTable">
+          <thead><tr>
+            <th>Period</th>
+            <th class="num">Units ordered</th>
+            <th class="num">Pallets</th>
+            <th class="num">Units short</th>
+            <th class="num">% short</th>
+            <th class="num">Est. pallets short</th>
+            <th class="num">Issues</th>
+            <th class="num">Hrs lost to issues</th>
+            <th class="num">Avg staff / day</th>
+            <th class="num">Hours worked</th>
+            <th class="num">Overtime hrs</th>
+            <th class="num">Units / hr</th>
+            <th class="num">Pallets / hr</th>
+            <th class="num">Picker attainment</th>
+          </tr></thead>
+          <tbody id="fulfilTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Pallets by customer</h3>
+      <p class="desc">Total pallets despatched per customer across the selected date range.</p>
+      <div class="chart-box h360"><canvas id="customerChart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ===== LABOUR ===== -->
+  <section id="tab-labour" class="tabpanel">
+    <div class="grid cols-3" id="labourStats" style="margin-bottom:16px;"></div>
+    <div class="grid cols-2" style="margin-bottom:16px;">
+      <div class="panel">
+        <h3>Actual hours by shift</h3>
+        <p class="desc">AM, PM and Night actual hours worked, stacked per day.</p>
+        <div class="chart-box h320"><canvas id="shiftHoursChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3>Overtime trend</h3>
+        <p class="desc">Total overtime hours logged per day across all shifts.</p>
+        <div class="chart-box h320"><canvas id="otTrendChart"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Hours composition</h3>
+      <p class="desc">How labour hours split between agency cover, holiday, sickness and salaried staff.</p>
+      <div class="chart-box h320" style="max-width:420px; margin:0 auto;"><canvas id="absenceChart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ===== ISSUES ===== -->
+  <section id="tab-issues" class="tabpanel">
+    <div class="panel" style="margin-bottom:16px;">
+      <h3>Issue frequency by type</h3>
+      <p class="desc">How often each issue type was logged in the selected range.</p>
+      <div class="chart-box h320"><canvas id="issueFreqChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>Event log</h3>
+      <div class="filters">
+        <select id="issueTypeFilter"></select>
+        <select id="issueReporterFilter"></select>
+        <input type="text" id="issueSearch" placeholder="Search comments or type…">
+        <span class="count" id="issueCount"></span>
+      </div>
+      <div class="table-scroll scroll-tbl">
+        <table class="data">
+          <thead><tr><th>Date</th><th>Time</th><th>Type</th><th class="num">Hrs lost</th><th class="num">People affected</th><th>Reported by</th><th>Comments</th></tr></thead>
+          <tbody id="issueTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== SHORTAGES ===== -->
+  <section id="tab-shortages" class="tabpanel">
+    <div id="shortageNotice"></div>
+    <div class="grid cols-3" id="shortageStats" style="margin-bottom:16px;"></div>
+    <div class="grid cols-2" style="margin-bottom:16px;">
+      <div class="panel">
+        <h3>Cases shorted, day by day</h3>
+        <p class="desc">Cases short on delivery vs cases ordered. Click a day to see everything else that happened on it.</p>
+        <div class="chart-box h320"><canvas id="shortageTrendChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3>Shortages by customer</h3>
+        <p class="desc">Total cases short per customer across the selected range.</p>
+        <div class="chart-box h320"><canvas id="shortageCustomerChart"></canvas></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:16px;">
+      <h3>Most-shorted products</h3>
+      <p class="desc">Products with the highest total cases shorted in the selected range.</p>
+      <div id="topShortedProducts"></div>
+    </div>
+    <div class="panel">
+      <h3>Shortage log</h3>
+      <div class="filters">
+        <select id="shortageCustomerFilter"></select>
+        <input type="text" id="shortageSearch" placeholder="Search product or delivery note…">
+        <span class="count" id="shortageCount"></span>
+      </div>
+      <div class="table-scroll scroll-tbl">
+        <table class="data">
+          <thead><tr><th>Date</th><th>Customer</th><th>Depot</th><th>Product</th><th class="num">Cases ordered</th><th class="num">Cases short</th><th class="num">Short %</th><th>Delivery note</th></tr></thead>
+          <tbody id="shortageTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== PICKERS ===== -->
+  <section id="tab-pickers" class="tabpanel">
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="filters" style="margin-bottom:0;">
+        <strong style="font-size:0.85rem;">Period</strong>
+        <select id="pickerMonthFilter"></select>
+        <select id="pickerWeekFilter"></select>
+        <span class="count" id="pickerPeriodNote" style="margin-left:0;"></span>
+      </div>
+    </div>
+    <div class="grid cols-2" style="margin-bottom:16px;">
+      <div class="panel">
+        <h3>Top attainment</h3>
+        <p class="desc">Highest actual-vs-target performers in the selected period (min. 3 days worked).</p>
+        <div id="topPerformers"></div>
+      </div>
+      <div class="panel">
+        <h3>Lowest attainment</h3>
+        <p class="desc">Lowest actual-vs-target performers in the selected period (min. 3 days worked) — worth a closer look.</p>
+        <div id="bottomPerformers"></div>
+      </div>
+    </div>
+    <div class="grid cols-2" style="margin-bottom:16px;">
+      <div class="panel">
+        <h3>Attainment by week</h3>
+        <p class="desc">Combined actual vs target per week. Click a bar to filter the leaderboard to that week.</p>
+        <div class="chart-box h260"><canvas id="weeklyAttainChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3>Attainment by month</h3>
+        <p class="desc">Combined actual vs target per month. Click a bar to filter the leaderboard to that month.</p>
+        <div class="chart-box h260"><canvas id="monthlyAttainChart"></canvas></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:16px;">
+      <h3>Attainment by shift</h3>
+      <p class="desc">Combined actual vs target across all people on each shift in the selected period, agency cover shown separately.</p>
+      <div class="chart-box h260"><canvas id="shiftAttainChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>Picker leaderboard</h3>
+      <div class="filters">
+        <select id="pickerShiftFilter"></select>
+        <select id="pickerAgencyFilter">
+          <option value="all">Permanent + agency</option>
+          <option value="perm">Permanent only</option>
+          <option value="agency">Agency only</option>
+        </select>
+        <input type="text" id="pickerSearch" placeholder="Search name…">
+        <span class="count" id="pickerCount"></span>
+      </div>
+      <div class="table-scroll scroll-tbl">
+        <table class="data" id="pickerTable">
+          <thead><tr>
+            <th data-key="name">Name</th>
+            <th data-key="shift">Shift</th>
+            <th class="num" data-key="days">Days worked</th>
+            <th class="num" data-key="actual">Total actual</th>
+            <th class="num" data-key="target">Total target</th>
+            <th class="num" data-key="avgDay">Avg / day</th>
+            <th class="num" data-key="attainment">Attainment</th>
+          </tr></thead>
+          <tbody id="pickerTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>Data is read from the Excel files in the repository each time the page loads</span>
+    <span>Click any date point, bar, or table row to open the full day detail</span>
+  </footer>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <button class="close" aria-label="Close">×</button>
+    <h2 id="modalTitle"></h2>
+    <div class="modal-sub" id="modalSub"></div>
+    <div class="modal-grid" id="modalStats"></div>
+    <div class="modal-section">
+      <h4>Staff and hours by shift</h4>
+      <div id="modalShifts"></div>
+    </div>
+    <div class="modal-section">
+      <h4>Pallets by customer</h4>
+      <div id="modalCustomers"></div>
+    </div>
+    <div class="modal-section">
+      <h4 id="modalEventsTitle">Issues logged</h4>
+      <div id="modalEvents"></div>
+    </div>
+    <div class="modal-section">
+      <h4 id="modalShortagesTitle">Shortages</h4>
+      <div id="modalShortages"></div>
+    </div>
+    <div class="modal-section">
+      <h4 id="modalPickersTitle">Pickers</h4>
+      <div id="modalPickers"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   Despatch Performance Control Board
+   Data is loaded automatically from the Excel files in the repository.
+   ===================================================================== */
+
+// ---- EDIT THESE if your file names or folders differ (case-sensitive) ----
+const REPO_FILES = {
+  hours:     'Daily Hours.xlsx',
+  events:    'Daily Labour Events and Issues Affecting Labour.xlsx',
+  pickers:   'Picker tracker.xlsx',
+  shortages: ['Shortages.xlsx', 'shortages.xlsx', 'SHORTAGES.xlsx', 'Shortages.XLSX'],
+};
+// --------------------------------------------------------------------------
+
+function emptyData() { return { staffing: [], orders: [], events: [], picks: [], shortages: [] }; }
+let DATA = emptyData();
+let DATA_SOURCE = 'none'; // 'none' | 'repo' | 'upload'
+const LOAD_ERR = {};       // slot key -> last load/parse error message
+
+function computeBounds(data) {
+  const dates = [];
+  ['staffing','orders','events','picks','shortages'].forEach(c => {
+    (data[c] || []).forEach(r => { if (r.date) dates.push(r.date); });
+  });
+  if (!dates.length) return { min: '2026-01-01', max: '2026-01-01' };
+  dates.sort();
+  return { min: dates[0], max: dates[dates.length - 1] };
+}
+let DATA_BOUNDS = computeBounds(DATA);
+
+/* ============ State ============ */
+const state = {
+  start: DATA_BOUNDS.min,
+  end: DATA_BOUNDS.max,
+  tab: 'overview',
+  gran: 'day',
+  issueFilter: { type: 'all', reporter: 'all', q: '' },
+  shortageFilter: { customer: 'all', q: '', limit: 200 },
+  pickerFilter: { shift: 'all', agency: 'all', q: '', month: 'all', week: 'all' },
+  pickerSort: { key: 'attainment', dir: 'desc' },
+};
+const charts = {};
+
+/* ============ Formatting / date helpers ============ */
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const pad = n => String(n).padStart(2, '0');
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const _nfCache = {};
+function fmtNum(n, d=0) {
+  if (n === null || n === undefined || isNaN(n)) return '–';
+  const nf = _nfCache[d] || (_nfCache[d] = new Intl.NumberFormat('en-GB', {maximumFractionDigits: d, minimumFractionDigits: d}));
+  return nf.format(Number(n));
+}
+function fmtPct(n, d=1) { return (n === null || n === undefined || isNaN(n)) ? '–' : n.toFixed(d) + '%'; }
+function ymd(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function parseYmd(s) { return new Date(s + 'T00:00:00'); }
+function addDays(s, n) { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); }
+function weekStart(s) { const d = parseYmd(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); }
+const _dfShort = new Intl.DateTimeFormat('en-GB', {day:'2-digit', month:'short'});
+function fmtDate(s) { return _dfShort.format(parseYmd(s)); }
+function fmtDateFull(s) { return parseYmd(s).toLocaleDateString('en-GB', {weekday:'long', day:'2-digit', month:'long', year:'numeric'}); }
+function monthRange(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return [`${ym}-01`, `${ym}-${pad(new Date(y, m, 0).getDate())}`];
+}
+function periodKey(s, g) {
+  if (g === 'day') return s;
+  if (g === 'week') return weekStart(s);
+  if (g === 'month') return s.slice(0, 7);
+  return s.slice(0, 4);
+}
+function periodBounds(k, g) {
+  if (g === 'day') return [k, k];
+  if (g === 'week') return [k, addDays(k, 6)];
+  if (g === 'month') return monthRange(k);
+  return [`${k}-01-01`, `${k}-12-31`];
+}
+function periodLabel(k, g) {
+  if (g === 'day') return parseYmd(k).toLocaleDateString('en-GB', {weekday:'short', day:'2-digit', month:'short'});
+  if (g === 'week') return `Wk ${fmtDate(k)} – ${fmtDate(addDays(k, 6))}`;
+  if (g === 'month') { const [y, m] = k.split('-').map(Number); return `${MONTH_NAMES[m-1]} ${y}`; }
+  return k;
+}
+function periodShort(k, g) {
+  if (g === 'day' || g === 'week') return fmtDate(k);
+  if (g === 'month') { const [y, m] = k.split('-').map(Number); return `${MONTH_NAMES[m-1].slice(0,3)} ${y}`; }
+  return k;
+}
+function inRange(dateStr) { return dateStr >= state.start && dateStr <= state.end; }
+function hexA(hex, a) {
+  hex = hex.replace('#','');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const r = parseInt(hex.substr(0,2),16), g = parseInt(hex.substr(2,2),16), b = parseInt(hex.substr(4,2),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function getCss(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || '#888'; }
+
+/* ============ Filtered datasets ============ */
+function getStaffing() { return DATA.staffing.filter(r => inRange(r.date)); }
+function getOrders() { return DATA.orders.filter(r => inRange(r.date)); }
+function getEvents() { return DATA.events.filter(r => inRange(r.date)); }
+function getPicks() { return DATA.picks.filter(r => inRange(r.date)); }
+function getShortages() { return DATA.shortages.filter(r => inRange(r.date)); }
+function currentSrc() {
+  return { orders: getOrders(), staffing: getStaffing(), events: getEvents(), shortages: getShortages(), picks: getPicks() };
+}
+
+/* ============ Aggregation (day / week / month / year / any range) ============ */
+// Hours actually worked: actual + agency + salaried (holiday and sickness are paid but not worked)
+function workedHours(s) { return (s.total_actual_hours || 0) + (s.agency_hours || 0) + (s.salaried_hours || 0); }
+function staffCount(s) { return (s.total_count || 0) + (s.agency_count || 0) + (s.salaried_count || 0); }
+
+function newAgg(key) {
+  return { key, dates: new Set(), orderDates: new Set(), units: 0, pallets: 0,
+    worked: 0, workedMatched: 0, ot: 0, agencyHrs: 0, staffSum: 0, staffDays: 0,
+    issues: 0, issueHrs: 0, shortCases: 0, shortUnits: 0, shortUnitsMatched: 0,
+    pickers: new Set(), pickActual: 0, pickTarget: 0 };
+}
+function aggregate(src, keyFn) {
+  const map = {};
+  const get = d => { const k = keyFn(d); return map[k] || (map[k] = newAgg(k)); };
+  src.orders.forEach(o => { const p = get(o.date); p.units += o.total_qty || 0; p.pallets += o.total_pallets || 0; p.orderDates.add(o.date); p.dates.add(o.date); });
+  src.staffing.forEach(s => {
+    const p = get(s.date); const w = workedHours(s);
+    p.worked += w; p.ot += s.total_overtime || 0; p.agencyHrs += s.agency_hours || 0;
+    p.staffSum += staffCount(s); p.staffDays += 1; p.dates.add(s.date);
+    if (p.orderDates.has(s.date)) p.workedMatched += w;
+  });
+  src.events.forEach(e => { const p = get(e.date); p.issues += 1; p.issueHrs += e.duration || 0; p.dates.add(e.date); });
+  src.shortages.forEach(r => {
+    const p = get(r.date);
+    p.shortCases += r.qty_shorted_cases || 0; p.shortUnits += r.qty_shorted_units || 0;
+    if (p.orderDates.has(r.date)) p.shortUnitsMatched += r.qty_shorted_units || 0;
+    p.dates.add(r.date);
+  });
+  src.picks.forEach(k => { const p = get(k.date); p.pickers.add(k.name); p.pickActual += k.actual || 0; p.pickTarget += k.target || 0; p.dates.add(k.date); });
+  return map;
+}
+function finalise(p) {
+  const o = Object.assign({}, p);
+  o.shortPct = p.units > 0 ? p.shortUnitsMatched / p.units * 100 : null;
+  o.estPalletsShort = (p.units > 0 && p.pallets > 0) ? p.shortUnitsMatched / (p.units / p.pallets) : 0;
+  o.avgStaff = p.staffDays ? p.staffSum / p.staffDays : 0;
+  o.unitsPerHr = p.workedMatched > 0 ? p.units / p.workedMatched : null;
+  o.palletsPerHr = p.workedMatched > 0 ? p.pallets / p.workedMatched : null;
+  o.attainment = p.pickTarget > 0 ? p.pickActual / p.pickTarget * 100 : null;
+  o.pickerCount = p.pickers.size;
+  return o;
+}
+function summarise(src) { const m = aggregate(src, () => 'all'); return finalise(m.all || newAgg('all')); }
+function buildPeriods(gran) {
+  const map = aggregate(currentSrc(), d => periodKey(d, gran));
+  return Object.keys(map).sort().map(k => finalise(map[k]));
+}
+
+/* ============ KPI strip ============ */
+function renderKPIs() {
+  const src = currentSrc();
+  const t = summarise(src);
+  const picks = src.picks;
+  const fill = t.shortPct === null ? null : 100 - t.shortPct;
+  const items = [
+    {cls:'teal', num: fmtNum(t.pallets), lbl: 'Pallets despatched', sub: fmtNum(t.units) + ' units ordered'},
+    {cls:'blue', num: fmtNum(t.worked), lbl: 'Labour hours worked', sub: t.unitsPerHr ? fmtNum(t.unitsPerHr) + ' units per hour' : t.staffDays + ' days recorded'},
+    {cls:'amber', num: fmtNum(t.ot), lbl: 'Overtime hours', sub: (t.worked ? (t.ot / t.worked * 100).toFixed(1) : '0.0') + '% of hours worked'},
+    {cls:'red', num: fmtNum(t.issues), lbl: 'Issues logged', sub: fmtNum(t.issueHrs, 1) + ' hrs affected'},
+    {cls: fill === null ? 'blue' : fill >= 98 ? 'teal' : fill >= 95 ? 'amber' : 'red', num: fill === null ? '–' : fill.toFixed(1) + '%', lbl: 'Order fill rate', sub: fmtNum(t.shortCases) + ' cases short'},
+    {cls:'violet', num: t.attainment === null ? '–' : t.attainment.toFixed(0) + '%', lbl: 'Picker attainment', sub: 'actual vs target'},
+    {cls:'blue', num: fmtNum(new Set(picks.filter(p => !p.agency).map(p => p.name)).size), lbl: 'Permanent pickers active', sub: 'unique names'},
+    {cls:'amber', num: fmtNum(new Set(picks.filter(p => p.agency).map(p => p.date + p.name)).size), lbl: 'Agency shifts filled', sub: 'temp cover'},
+  ];
+  document.getElementById('kpiStrip').innerHTML = items.map(i => `
+    <div class="kpi ${i.cls}">
+      <div class="num">${i.num}</div>
+      <div class="lbl">${i.lbl}</div>
+      <div class="sub">${i.sub}</div>
+    </div>`).join('');
+}
+
+/* ============ Chart helpers ============ */
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.font.family = "'IBM Plex Sans', sans-serif";
+  Chart.defaults.color = getCss('--text-dim');
+  Chart.defaults.borderColor = getCss('--border');
+}
+function destroyChart(key) { if (charts[key]) { charts[key].destroy(); delete charts[key]; } }
+
+/* ============ OVERVIEW TAB ============ */
+function renderOverview() {
+  const events = getEvents();
+  const dayList = buildPeriods('day');
+  const dates = dayList.map(p => p.key);
+
+  destroyChart('trend');
+  charts.trend = new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: {
+      labels: dates.map(fmtDate),
+      datasets: [
+        { type:'bar', label:'Pallets despatched', data: dayList.map(p => p.pallets), backgroundColor: hexA(getCss('--teal'),0.75), yAxisID:'y', borderRadius: 2, order: 2 },
+        { type:'line', label:'Overtime hours', data: dayList.map(p => p.ot), borderColor: getCss('--amber'), backgroundColor: 'transparent', yAxisID:'y1', tension:0.3, pointRadius:0, borderWidth:2, order:1 },
+        { type:'line', label:'Issues logged', data: dayList.map(p => p.issues), borderColor: getCss('--red'), backgroundColor: 'transparent', yAxisID:'y1', tension:0.3, pointRadius:0, borderWidth:2, order:0, borderDash:[4,3] },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      onClick: (evt) => {
+        const points = charts.trend.getElementsAtEventForMode(evt, 'index', {intersect:false}, true);
+        if (points.length) openDayModal(dates[points[0].index]);
+      },
+      plugins: { legend: { position:'top', labels:{ boxWidth:10, usePointStyle:true, font:{size:11} } },
+        tooltip: { callbacks: { title: (items) => dates[items[0].dataIndex] ? fmtDateFull(dates[items[0].dataIndex]) : '' } } },
+      scales: {
+        x: { grid: { display:false }, ticks: { maxRotation:0, autoSkip:true, maxTicksLimit:14, font:{size:10} } },
+        y: { position:'left', title:{display:true, text:'Pallets', font:{size:10}}, grid:{color: getCss('--border')} },
+        y1: { position:'right', title:{display:true, text:'Hours / Count', font:{size:10}}, grid:{display:false} },
+      }
+    }
+  });
+
+  const byType = {};
+  events.forEach(e => { byType[e.type] = byType[e.type] || {count:0, dur:0}; byType[e.type].count++; byType[e.type].dur += e.duration; });
+  const typesSorted = Object.entries(byType).sort((a,b) => b[1].dur - a[1].dur);
+  destroyChart('paretoOverview');
+  charts.paretoOverview = new Chart(document.getElementById('paretoOverviewChart'), {
+    type: 'bar',
+    data: { labels: typesSorted.map(t => t[0]), datasets: [{ label:'Hours lost', data: typesSorted.map(t => t[1].dur), backgroundColor: hexA(getCss('--red'),0.75), borderRadius:2 }] },
+    options: { responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{ afterLabel:(item) => `${typesSorted[item.dataIndex][1].count} occurrences`}} },
+      scales:{ x:{ title:{display:true,text:'Hours',font:{size:10}} }, y:{ ticks:{font:{size:10.5}} } } }
+  });
+
+  const worst = dayList.filter(d => d.issues > 0).sort((a,b) => b.issueHrs - a.issueHrs).slice(0,8);
+  document.getElementById('worstDaysList').innerHTML = worst.map(w => `
+    <div class="bar-row" style="cursor:pointer" onclick="openDayModal('${w.key}')">
+      <div class="name">${fmtDateFull(w.key)}</div>
+      <div class="track"><div class="fill" style="width:${Math.min(100, w.issueHrs / worst[0].issueHrs * 100)}%; background:${getCss('--red')}"></div></div>
+      <div class="val">${w.issueHrs.toFixed(1)}h / ${w.issues}i</div>
+    </div>`).join('') || '<p class="desc">No issues in this range.</p>';
+}
+
+/* ============ FULFILMENT TAB (day / week / month / year) ============ */
+function renderFulfilment() {
+  const gran = state.gran;
+  const periods = buildPeriods(gran);
+  document.querySelectorAll('#granButtons button').forEach(b => b.classList.toggle('active', b.dataset.gran === gran));
+
+  destroyChart('fulfilTrend');
+  charts.fulfilTrend = new Chart(document.getElementById('fulfilTrendChart'), {
+    type: 'bar',
+    data: { labels: periods.map(p => periodShort(p.key, gran)), datasets: [
+      { type:'bar', label:'Pallets despatched', data: periods.map(p => p.pallets), backgroundColor: hexA(getCss('--teal'),0.75), yAxisID:'y', borderRadius:2, order:2 },
+      { type:'line', label:'Hours worked', data: periods.map(p => p.worked), borderColor: getCss('--blue'), backgroundColor:'transparent', yAxisID:'y1', tension:0.3, pointRadius: periods.length < 40 ? 2 : 0, borderWidth:2, order:1 },
+      { type:'line', label:'Issues logged', data: periods.map(p => p.issues), borderColor: getCss('--red'), backgroundColor:'transparent', yAxisID:'y2', tension:0.3, pointRadius: periods.length < 40 ? 2 : 0, borderWidth:2, borderDash:[4,3], order:0 },
+    ]},
+    options: { responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+      onClick: (evt) => { const pts = charts.fulfilTrend.getElementsAtEventForMode(evt,'index',{intersect:false},true); if (pts.length) openPeriodModal(periods[pts[0].index].key, gran); },
+      plugins:{ legend:{position:'top', labels:{boxWidth:10, usePointStyle:true, font:{size:11}}},
+        tooltip:{ callbacks:{
+          title: (items) => periods[items[0].dataIndex] ? periodLabel(periods[items[0].dataIndex].key, gran) : '',
+          afterBody: (items) => { const p = periods[items[0].dataIndex]; if (!p) return ''; return [`Units ordered: ${fmtNum(p.units)}`, `Units short: ${fmtNum(p.shortUnitsMatched)} (${fmtPct(p.shortPct)})`, `Avg staff/day: ${fmtNum(p.avgStaff,1)}`]; } } } },
+      scales:{ x:{grid:{display:false}, ticks:{maxRotation:0, autoSkip:true, maxTicksLimit:14, font:{size:10}}},
+        y:{position:'left', title:{display:true,text:'Pallets',font:{size:10}}},
+        y1:{position:'right', title:{display:true,text:'Hours worked',font:{size:10}}, grid:{display:false}},
+        y2:{position:'right', beginAtZero:true, title:{display:true,text:'Issues',font:{size:10}}, grid:{display:false}} } }
+  });
+
+  const rows = periods.slice().reverse();
+  document.getElementById('fulfilTableBody').innerHTML = rows.map(p => {
+    const pctStyle = p.shortPct !== null && p.shortPct >= 5 ? `color:${getCss('--red')}; font-weight:600;` : (p.shortPct !== null && p.shortPct >= 3 ? `color:${getCss('--amber')}; font-weight:600;` : '');
+    return `<tr style="cursor:pointer" onclick="openPeriodModal('${p.key}','${gran}')">
+      <td style="white-space:nowrap">${periodLabel(p.key, gran)}</td>
+      <td class="num">${fmtNum(p.units)}</td>
+      <td class="num">${fmtNum(p.pallets)}</td>
+      <td class="num">${fmtNum(p.shortUnitsMatched)}</td>
+      <td class="num" style="${pctStyle}">${fmtPct(p.shortPct)}</td>
+      <td class="num">${fmtNum(p.estPalletsShort, 1)}</td>
+      <td class="num">${fmtNum(p.issues)}</td>
+      <td class="num">${fmtNum(p.issueHrs, 1)}</td>
+      <td class="num">${fmtNum(p.avgStaff, 1)}</td>
+      <td class="num">${fmtNum(p.worked, 1)}</td>
+      <td class="num">${fmtNum(p.ot, 1)}</td>
+      <td class="num">${fmtNum(p.unitsPerHr, 0)}</td>
+      <td class="num">${fmtNum(p.palletsPerHr, 2)}</td>
+      <td class="num">${fmtPct(p.attainment, 0)}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="14" class="desc">No data in this range.</td></tr>';
+
+  const custTotals = {};
+  getOrders().forEach(o => Object.entries(o.customers).forEach(([name, v]) => {
+    custTotals[name] = custTotals[name] || {qty:0, pallets:0};
+    custTotals[name].qty += v.qty; custTotals[name].pallets += v.pallets;
+  }));
+  const sorted = Object.entries(custTotals).sort((a,b) => b[1].pallets - a[1].pallets);
+  destroyChart('customerBar');
+  charts.customerBar = new Chart(document.getElementById('customerChart'), {
+    type:'bar',
+    data:{ labels: sorted.map(s => s[0]), datasets:[{ label:'Pallets', data: sorted.map(s => s[1].pallets), backgroundColor: hexA(getCss('--teal'),0.8), borderRadius:2 }]},
+    options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{legend:{display:false}, tooltip:{callbacks:{afterLabel:(item) => `${fmtNum(sorted[item.dataIndex][1].qty)} units ordered`}}},
+      scales:{ x:{title:{display:true,text:'Pallets',font:{size:10}}}, y:{ ticks:{font:{size:10}} } } }
+  });
+}
+
+/* ============ LABOUR TAB ============ */
+function renderLabour() {
+  const staffing = getStaffing().slice().sort((a,b) => a.date.localeCompare(b.date));
+  destroyChart('shiftHours');
+  charts.shiftHours = new Chart(document.getElementById('shiftHoursChart'), {
+    type:'bar',
+    data:{ labels: staffing.map(s => fmtDate(s.date)), datasets:[
+      { label:'AM', data: staffing.map(s => s.am_actual), backgroundColor: hexA(getCss('--blue'),0.85), stack:'s' },
+      { label:'PM', data: staffing.map(s => s.pm_actual), backgroundColor: hexA(getCss('--amber'),0.85), stack:'s' },
+      { label:'Night', data: staffing.map(s => s.night_actual), backgroundColor: hexA(getCss('--violet'),0.85), stack:'s' },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'top', labels:{boxWidth:10,usePointStyle:true,font:{size:11}}}},
+      scales:{ x:{stacked:true, grid:{display:false}, ticks:{maxTicksLimit:14,font:{size:10}}}, y:{stacked:true, title:{display:true,text:'Hours',font:{size:10}}} } }
+  });
+
+  destroyChart('otTrend');
+  charts.otTrend = new Chart(document.getElementById('otTrendChart'), {
+    type:'line',
+    data:{ labels: staffing.map(s => fmtDate(s.date)), datasets:[
+      { label:'Overtime hours', data: staffing.map(s => s.total_overtime), borderColor:getCss('--amber'), backgroundColor: hexA(getCss('--amber'),0.15), fill:true, tension:0.3, pointRadius:0, borderWidth:2 },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{ x:{grid:{display:false}, ticks:{maxTicksLimit:14,font:{size:10}}}, y:{title:{display:true,text:'Hours',font:{size:10}}} } }
+  });
+
+  const sums = staffing.reduce((a,s) => { a.holiday += s.holiday_hours; a.sick += s.sick_hours; a.agency += s.agency_hours; a.salaried += s.salaried_hours; return a; }, {holiday:0,sick:0,agency:0,salaried:0});
+  destroyChart('absenceDonut');
+  charts.absenceDonut = new Chart(document.getElementById('absenceChart'), {
+    type:'doughnut',
+    data:{ labels:['Agency hours','Holiday hours','Sick hours','Salaried hours'], datasets:[{ data:[sums.agency,sums.holiday,sums.sick,sums.salaried], backgroundColor:[getCss('--red'),getCss('--blue'),getCss('--amber'),getCss('--teal')], borderColor: getCss('--panel'), borderWidth:2 }]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{boxWidth:10,usePointStyle:true,font:{size:10.5}} } } }
+  });
+
+  const worked = staffing.reduce((a,s) => a + workedHours(s), 0);
+  const totalOT = staffing.reduce((a,s) => a + s.total_overtime, 0);
+  const avgHead = staffing.length ? staffing.reduce((a,s) => a + staffCount(s), 0) / staffing.length : 0;
+  document.getElementById('labourStats').innerHTML = `
+    <div class="modal-stat"><div class="num">${worked ? (totalOT / worked * 100).toFixed(1) : '0.0'}%</div><div class="lbl">Overtime as share of hours worked</div></div>
+    <div class="modal-stat"><div class="num">${avgHead.toFixed(0)}</div><div class="lbl">Avg daily headcount (incl. agency)</div></div>
+    <div class="modal-stat"><div class="num">${fmtNum(sums.agency)}</div><div class="lbl">Agency hours used</div></div>
+    <div class="modal-stat"><div class="num">${fmtNum(sums.sick)}</div><div class="lbl">Sick hours lost</div></div>
+  `;
+}
+
+/* ============ ISSUES TAB ============ */
+function populateIssueFilters() {
+  const types = [...new Set(DATA.events.map(e => e.type))].sort();
+  const reporters = [...new Set(DATA.events.flatMap(e => e.reporters))].sort();
+  const ts = document.getElementById('issueTypeFilter');
+  ts.innerHTML = '<option value="all">All types</option>' + types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  ts.value = state.issueFilter.type;
+  const rs = document.getElementById('issueReporterFilter');
+  rs.innerHTML = '<option value="all">All reporters</option>' + reporters.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  rs.value = state.issueFilter.reporter;
+}
+function renderIssues() {
+  let events = getEvents();
+  const f = state.issueFilter;
+  if (f.type !== 'all') events = events.filter(e => e.type === f.type);
+  if (f.reporter !== 'all') events = events.filter(e => e.reporters.includes(f.reporter));
+  if (f.q) { const q = f.q.toLowerCase(); events = events.filter(e => (e.comments||'').toLowerCase().includes(q) || (e.type||'').toLowerCase().includes(q)); }
+  events = events.slice().sort((a,b) => (b.date + String(b.time||'')).localeCompare(a.date + String(a.time||'')));
+
+  document.getElementById('issueCount').textContent = `${events.length} of ${getEvents().length} events`;
+  document.getElementById('issueTableBody').innerHTML = events.map(e => `
+    <tr>
+      <td style="cursor:pointer" onclick="openDayModal('${e.date}')">${fmtDate(e.date)}</td>
+      <td>${esc(e.time || '–')}</td>
+      <td>${esc(e.type)}</td>
+      <td class="num">${e.duration.toFixed(2)}</td>
+      <td class="num">${fmtNum(e.headcount_affected)}</td>
+      <td>${esc(e.reporter_disp || '–')}</td>
+      <td style="max-width:340px">${esc(e.comments)}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="desc">No matching events.</td></tr>';
+
+  const byType = {};
+  getEvents().forEach(e => { byType[e.type] = byType[e.type] || {count:0,dur:0}; byType[e.type].count++; byType[e.type].dur += e.duration; });
+  const typesSorted = Object.entries(byType).sort((a,b) => b[1].count - a[1].count);
+  destroyChart('issueFreq');
+  charts.issueFreq = new Chart(document.getElementById('issueFreqChart'), {
+    type:'bar',
+    data:{ labels: typesSorted.map(t => t[0]), datasets:[{ label:'Occurrences', data: typesSorted.map(t => t[1].count), backgroundColor: hexA(getCss('--amber'),0.8), borderRadius:2 }]},
+    options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{legend:{display:false}},
+      scales:{ x:{title:{display:true,text:'Occurrences',font:{size:10}}}, y:{ticks:{font:{size:10}}} } }
+  });
+}
+
+/* ============ SHORTAGES TAB ============ */
+function populateShortageFilters() {
+  const customers = [...new Set(DATA.shortages.map(s => s.customer))].sort();
+  const cs = document.getElementById('shortageCustomerFilter');
+  cs.innerHTML = '<option value="all">All customers</option>' + customers.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  cs.value = state.shortageFilter.customer;
+}
+function shortageNoticeHtml(inRangeCount) {
+  const total = DATA.shortages.length;
+  if (!total) {
+    if (LOAD_ERR.shortages) return `<div class="notice err"><strong>Shortages.xlsx could not be loaded.</strong> ${esc(LOAD_ERR.shortages)}<br>Check the file is in the same folder as this page and named exactly <span class="mono">Shortages.xlsx</span>, or use “Manual data upload” at the top of the page.</div>`;
+    if (DATA_SOURCE === 'none') return '<div class="notice">Loading shortages…</div>';
+    return '<div class="notice err"><strong>The shortages workbook loaded but no usable rows were found.</strong> It needs a sheet with a “Delivery Date” column and a “Quantity Shorted” column.</div>';
+  }
+  if (!inRangeCount) {
+    let mn = '9999', mx = '0000';
+    DATA.shortages.forEach(r => { if (r.date < mn) mn = r.date; if (r.date > mx) mx = r.date; });
+    return `<div class="notice">${fmtNum(total)} shortage lines are loaded (${fmtDate(mn)} ${mn.slice(0,4)} – ${fmtDate(mx)} ${mx.slice(0,4)}) but none fall inside the dates currently selected (${fmtDate(state.start)} – ${fmtDate(state.end)}). <button class="btn secondary" onclick="setPreset('all')">Show all data</button></div>`;
+  }
+  return '';
+}
+function renderShortages() {
+  const all = getShortages();
+  document.getElementById('shortageNotice').innerHTML = shortageNoticeHtml(all.length);
+  const t = summarise(currentSrc());
+  const custCount = new Set(all.map(r => r.customer)).size;
+  const lineShort = all.reduce((a, r) => a + r.qty_shorted_cases, 0);
+  const lineOrd = all.reduce((a, r) => a + r.qty_order_cases, 0);
+  const linePct = lineOrd ? lineShort / lineOrd * 100 : null;
+  const pctStat = t.shortPct !== null
+    ? { num: fmtPct(t.shortPct), lbl: 'Units short as % of all units ordered (days with order data)' }
+    : { num: fmtPct(linePct), lbl: 'Cases short as % of cases ordered on the short lines (no order data for these dates)' };
+  document.getElementById('shortageStats').innerHTML = `
+    <div class="modal-stat"><div class="num">${fmtNum(t.shortCases)}</div><div class="lbl">Total cases short (${fmtNum(t.shortUnits)} units)</div></div>
+    <div class="modal-stat"><div class="num">${pctStat.num}</div><div class="lbl">${pctStat.lbl}</div></div>
+    <div class="modal-stat"><div class="num">${fmtNum(all.length)}</div><div class="lbl">Short lines across ${custCount} customers</div></div>
+  `;
+
+  const red = getCss('--red');
+  const byDate = {};
+  all.forEach(r => { byDate[r.date] = (byDate[r.date] || 0) + r.qty_shorted_cases; });
+  const dates = Object.keys(byDate).sort();
+  destroyChart('shortageTrend');
+  charts.shortageTrend = new Chart(document.getElementById('shortageTrendChart'), {
+    type:'bar',
+    data:{ labels: dates.map(fmtDate), datasets:[{ label:'Cases short', data: dates.map(d => byDate[d]), backgroundColor: hexA(red,0.8), borderRadius:2 }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      onClick: (evt) => { const pts = charts.shortageTrend.getElementsAtEventForMode(evt,'index',{intersect:false},true); if (pts.length) openDayModal(dates[pts[0].index]); },
+      plugins:{legend:{display:false}, tooltip:{callbacks:{title:(items) => dates[items[0].dataIndex] ? fmtDateFull(dates[items[0].dataIndex]) : ''}}},
+      scales:{ x:{grid:{display:false}, ticks:{maxTicksLimit:14,font:{size:10}}}, y:{title:{display:true,text:'Cases short',font:{size:10}}} } }
+  });
+
+  const byCust = {};
+  all.forEach(r => { byCust[r.customer] = (byCust[r.customer] || 0) + r.qty_shorted_cases; });
+  const custSorted = Object.entries(byCust).sort((a,b) => b[1] - a[1]);
+  destroyChart('shortageCustomer');
+  charts.shortageCustomer = new Chart(document.getElementById('shortageCustomerChart'), {
+    type:'bar',
+    data:{ labels: custSorted.map(c => c[0]), datasets:[{ label:'Cases short', data: custSorted.map(c => c[1]), backgroundColor: hexA(red,0.75), borderRadius:2 }]},
+    options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{legend:{display:false}},
+      scales:{ x:{title:{display:true,text:'Cases short',font:{size:10}}}, y:{ticks:{font:{size:10}}} } }
+  });
+
+  const byProduct = {};
+  all.forEach(r => { byProduct[r.product_name] = (byProduct[r.product_name] || 0) + r.qty_shorted_cases; });
+  const prodSorted = Object.entries(byProduct).sort((a,b) => b[1] - a[1]).slice(0,10);
+  const maxP = Math.max(...prodSorted.map(p => p[1]), 1);
+  document.getElementById('topShortedProducts').innerHTML = prodSorted.map(p => `
+    <div class="bar-row"><div class="name" title="${esc(p[0])}">${esc(p[0])}</div><div class="track"><div class="fill" style="width:${p[1]/maxP*100}%; background:${red}"></div></div><div class="val">${fmtNum(p[1])} cs</div></div>`).join('') || '<p class="desc">No shortages in this range.</p>';
+
+  renderShortageTable();
+}
+// The log can hold thousands of lines, so it is drawn in pages of 200.
+function renderShortageTable() {
+  const all = getShortages();
+  const f = state.shortageFilter;
+  let rows = all;
+  if (f.customer !== 'all') rows = rows.filter(r => r.customer === f.customer);
+  if (f.q) { const q = f.q.toLowerCase(); rows = rows.filter(r => (r.product_name||'').toLowerCase().includes(q) || String(r.delivery_note || '').toLowerCase().includes(q)); }
+  rows = rows.slice().sort((a,b) => b.date.localeCompare(a.date));
+  const shown = rows.slice(0, f.limit);
+  document.getElementById('shortageCount').textContent = shown.length < rows.length
+    ? `Showing ${fmtNum(shown.length)} of ${fmtNum(rows.length)} lines`
+    : `${fmtNum(rows.length)} of ${fmtNum(all.length)} lines`;
+  const red = getCss('--red');
+  let html = shown.map(r => {
+    const pct = r.qty_order_cases ? (r.qty_shorted_cases / r.qty_order_cases * 100) : 0;
+    return `<tr>
+      <td style="cursor:pointer" onclick="openDayModal('${r.date}')">${fmtDate(r.date)} ${r.date.slice(0,4)}</td>
+      <td>${esc(r.customer)}</td>
+      <td>${esc(r.depot)}</td>
+      <td>${esc(r.product_name)}</td>
+      <td class="num">${fmtNum(r.qty_order_cases)}</td>
+      <td class="num" style="color:${red}; font-weight:600;">${fmtNum(r.qty_shorted_cases)}</td>
+      <td class="num">${pct.toFixed(0)}%</td>
+      <td>${esc(r.delivery_note || '')}</td>
+    </tr>`;
+  }).join('');
+  if (shown.length < rows.length) {
+    html += `<tr><td colspan="8" style="text-align:center;padding:12px;"><button class="btn secondary" onclick="showMoreShortages()">Show 200 more</button></td></tr>`;
+  }
+  document.getElementById('shortageTableBody').innerHTML = html || '<tr><td colspan="8" class="desc">No matching shortages.</td></tr>';
+}
+function showMoreShortages() { state.shortageFilter.limit += 200; renderShortageTable(); }
+
+/* ============ PICKERS TAB (with weekly / monthly filters) ============ */
+function populatePickerFilters() {
+  const shifts = [...new Set(DATA.picks.map(p => p.shift))].sort();
+  const s = document.getElementById('pickerShiftFilter');
+  s.innerHTML = '<option value="all">All shifts</option>' + shifts.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  s.value = state.pickerFilter.shift;
+}
+function populatePickerPeriodFilters() {
+  const f = state.pickerFilter;
+  const picks = getPicks();
+  const months = [...new Set(picks.map(p => p.date.slice(0,7)))].sort();
+  if (f.month !== 'all' && !months.includes(f.month)) f.month = 'all';
+  const ms = document.getElementById('pickerMonthFilter');
+  ms.innerHTML = '<option value="all">All months</option>' + months.map(m => `<option value="${m}">${periodLabel(m,'month')}</option>`).join('');
+  ms.value = f.month;
+  const inMonth = f.month === 'all' ? picks : picks.filter(p => p.date.startsWith(f.month));
+  const weeks = [...new Set(inMonth.map(p => weekStart(p.date)))].sort();
+  if (f.week !== 'all' && !weeks.includes(f.week)) f.week = 'all';
+  const ws = document.getElementById('pickerWeekFilter');
+  ws.innerHTML = '<option value="all">All weeks</option>' + weeks.map(w => `<option value="${w}">${periodLabel(w,'week')}</option>`).join('');
+  ws.value = f.week;
+}
+function getPickerPicks() {
+  const f = state.pickerFilter;
+  let picks = getPicks();
+  if (f.month !== 'all') picks = picks.filter(p => p.date.startsWith(f.month));
+  if (f.week !== 'all') { const e = addDays(f.week, 6); picks = picks.filter(p => p.date >= f.week && p.date <= e); }
+  return picks;
+}
+function applyRowFilters(picks) {
+  const f = state.pickerFilter;
+  if (f.shift !== 'all') picks = picks.filter(p => p.shift === f.shift);
+  if (f.agency === 'perm') picks = picks.filter(p => !p.agency);
+  if (f.agency === 'agency') picks = picks.filter(p => p.agency);
+  if (f.q) { const q = f.q.toLowerCase(); picks = picks.filter(p => p.name.toLowerCase().includes(q)); }
+  return picks;
+}
+function aggregatePickers(picks) {
+  const byName = {};
+  picks.forEach(p => {
+    const r = byName[p.name] = byName[p.name] || { name:p.name, shift:p.shift, agency:p.agency, actual:0, target:0, dateSet:new Set() };
+    r.actual += p.actual; r.target += p.target; r.dateSet.add(p.date);
+  });
+  return Object.values(byName).map(r => ({ ...r, days: r.dateSet.size, attainment: r.target ? r.actual / r.target * 100 : 0, avgDay: r.dateSet.size ? r.actual / r.dateSet.size : 0 }));
+}
+function buildLeaderboard() {
+  const rows = aggregatePickers(applyRowFilters(getPickerPicks()));
+  const {key, dir} = state.pickerSort;
+  rows.sort((a,b) => dir === 'asc' ? (a[key] > b[key] ? 1 : -1) : (a[key] < b[key] ? 1 : -1));
+  return rows;
+}
+function pillClass(r) {
+  if (r.agency) return 'agency';
+  if (r.shift === 'AM') return 'am';
+  if (r.shift === 'PM') return 'pm';
+  if (r.shift === 'NIGHT') return 'night';
+  return 'unknown';
+}
+function attainByPeriod(picks, gran) {
+  const m = {};
+  picks.forEach(p => { const k = periodKey(p.date, gran); m[k] = m[k] || {actual:0, target:0}; m[k].actual += p.actual; m[k].target += p.target; });
+  return Object.keys(m).sort().filter(k => m[k].target > 0).map(k => ({ key:k, pct: m[k].actual / m[k].target * 100 }));
+}
+function drawAttainChart(id, chartKey, gran) {
+  const rows = attainByPeriod(applyRowFilters(getPicks()), gran);
+  destroyChart(chartKey);
+  charts[chartKey] = new Chart(document.getElementById(id), {
+    type:'bar',
+    data:{ labels: rows.map(r => periodShort(r.key, gran)), datasets:[
+      { type:'bar', label:'Attainment %', data: rows.map(r => r.pct), backgroundColor: rows.map(r => hexA(getCss(r.pct >= 100 ? '--green' : r.pct >= 85 ? '--amber' : '--red'), 0.8)), borderRadius:3 },
+      { type:'line', label:'Target 100%', data: rows.map(() => 100), borderColor: getCss('--text-faint'), borderDash:[4,3], pointRadius:0, borderWidth:1 },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      onClick: (evt) => {
+        const pts = charts[chartKey].getElementsAtEventForMode(evt,'index',{intersect:false},true);
+        if (!pts.length) return;
+        const key = rows[pts[0].index].key;
+        if (gran === 'week') { state.pickerFilter.month = 'all'; state.pickerFilter.week = key; }
+        else { state.pickerFilter.month = key; state.pickerFilter.week = 'all'; }
+        renderPickers();
+      },
+      plugins:{legend:{display:false}, tooltip:{callbacks:{title:(items) => rows[items[0].dataIndex] ? periodLabel(rows[items[0].dataIndex].key, gran) : ''}}},
+      scales:{ x:{grid:{display:false}, ticks:{font:{size:10}}}, y:{ beginAtZero:true, title:{display:true,text:'Attainment %',font:{size:10}} } } }
+  });
+}
+function renderPickers() {
+  populatePickerPeriodFilters();
+  const f = state.pickerFilter;
+  let note = 'Showing the whole selected date range';
+  if (f.week !== 'all') note = periodLabel(f.week, 'week');
+  else if (f.month !== 'all') note = periodLabel(f.month, 'month');
+  document.getElementById('pickerPeriodNote').textContent = note;
+
+  const rows = buildLeaderboard();
+  document.getElementById('pickerCount').textContent = `${rows.length} people`;
+  document.getElementById('pickerTableBody').innerHTML = rows.map(r => `
+    <tr>
+      <td>${esc(r.name)}</td>
+      <td><span class="pill ${pillClass(r)}">${esc(r.agency ? 'AGENCY' : r.shift)}</span></td>
+      <td class="num">${r.days}</td>
+      <td class="num">${fmtNum(r.actual)}</td>
+      <td class="num">${fmtNum(r.target)}</td>
+      <td class="num">${fmtNum(r.avgDay)}</td>
+      <td class="num" style="color:${r.attainment>=100?getCss('--green'):r.attainment>=85?getCss('--amber'):getCss('--red')}; font-weight:600;">${r.attainment.toFixed(0)}%</td>
+    </tr>`).join('');
+
+  const eligible = rows.filter(r => r.days >= 3 && r.target > 0);
+  const top = eligible.slice().sort((a,b) => b.attainment - a.attainment).slice(0,8);
+  const bottom = eligible.slice().sort((a,b) => a.attainment - b.attainment).slice(0,8);
+  const maxA = Math.max(...top.map(t => t.attainment), 100);
+  document.getElementById('topPerformers').innerHTML = top.map(r => `
+    <div class="bar-row"><div class="name">${esc(r.name)}</div><div class="track"><div class="fill" style="width:${Math.min(100, r.attainment/maxA*100)}%; background:${getCss('--green')}"></div></div><div class="val">${r.attainment.toFixed(0)}%</div></div>`).join('') || '<p class="desc">Not enough data in this period.</p>';
+  document.getElementById('bottomPerformers').innerHTML = bottom.map(r => `
+    <div class="bar-row"><div class="name">${esc(r.name)}</div><div class="track"><div class="fill" style="width:${Math.min(100, r.attainment/maxA*100)}%; background:${getCss('--red')}"></div></div><div class="val">${r.attainment.toFixed(0)}%</div></div>`).join('') || '<p class="desc">Not enough data in this period.</p>';
+
+  drawAttainChart('weeklyAttainChart', 'weeklyAttain', 'week');
+  drawAttainChart('monthlyAttainChart', 'monthlyAttain', 'month');
+
+  const byShift = {};
+  getPickerPicks().forEach(p => { const k = p.agency ? 'Agency' : p.shift; byShift[k] = byShift[k] || {actual:0, target:0}; byShift[k].actual += p.actual; byShift[k].target += p.target; });
+  const shiftEntries = Object.entries(byShift).filter(e => e[1].target > 0);
+  destroyChart('shiftAttain');
+  charts.shiftAttain = new Chart(document.getElementById('shiftAttainChart'), {
+    type:'bar',
+    data:{ labels: shiftEntries.map(e => e[0]), datasets:[{ label:'Attainment %', data: shiftEntries.map(e => e[1].actual / e[1].target * 100), backgroundColor: hexA(getCss('--violet'),0.8), borderRadius:3 }]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ y:{ title:{display:true,text:'Attainment %',font:{size:10}} } } }
+  });
+}
+function sortPickers(key) {
+  if (state.pickerSort.key === key) state.pickerSort.dir = state.pickerSort.dir === 'asc' ? 'desc' : 'asc';
+  else { state.pickerSort.key = key; state.pickerSort.dir = 'desc'; }
+  renderPickers();
+  updateSortArrows();
+}
+function updateSortArrows() {
+  document.querySelectorAll('#pickerTable th[data-key]').forEach(th => {
+    const k = th.getAttribute('data-key');
+    const base = th.textContent.replace(/ ?[▲▼]$/, '');
+    th.innerHTML = base + (k === state.pickerSort.key ? ` <span class="arrow">${state.pickerSort.dir === 'asc' ? '▲' : '▼'}</span>` : '');
+  });
+}
+
+/* ============ Day / week / month / year detail modal ============ */
+function openDayModal(date) { openPeriodModal(date, 'day'); }
+function openPeriodModal(key, gran) {
+  let [s, e] = periodBounds(key, gran);
+  if (s < state.start) s = state.start;
+  if (e > state.end) e = state.end;
+  const inR = d => d >= s && d <= e;
+  const src = {
+    orders: DATA.orders.filter(r => inR(r.date)), staffing: DATA.staffing.filter(r => inR(r.date)),
+    events: DATA.events.filter(r => inR(r.date)), shortages: DATA.shortages.filter(r => inR(r.date)),
+    picks: DATA.picks.filter(r => inR(r.date)),
+  };
+  const t = summarise(src);
+  const single = gran === 'day';
+
+  document.getElementById('modalTitle').textContent = single ? fmtDateFull(key) : periodLabel(key, gran);
+  const dayRow = single ? DATA.staffing.find(x => x.date === key) : null;
+  document.getElementById('modalSub').textContent = single
+    ? (dayRow ? `${dayRow.day} · ${fmtNum(staffCount(dayRow))} people on shift (incl. agency)` : '')
+    : `${fmtDate(s)} – ${fmtDate(e)} · ${t.dates.size} days with data`;
+
+  const tile = (num, lbl) => `<div class="modal-stat"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`;
+  document.getElementById('modalStats').innerHTML = [
+    tile(fmtNum(t.pallets), 'Pallets despatched'),
+    tile(fmtNum(t.units), 'Units ordered'),
+    tile(`${fmtNum(t.shortUnits)} <span style="font-size:0.75rem;color:var(--text-dim)">(${fmtPct(t.shortPct)})</span>`, `Units short · ${fmtNum(t.shortCases)} cases · est. ${fmtNum(t.estPalletsShort,1)} pallets`),
+    tile(fmtNum(t.worked, 1), 'Hours worked'),
+    tile(single ? fmtNum(t.avgStaff, 0) : fmtNum(t.avgStaff, 1), single ? 'People on shift' : 'Avg people per day'),
+    tile(fmtNum(t.ot, 1), 'Overtime hours'),
+    tile(t.unitsPerHr ? `${fmtNum(t.unitsPerHr)} / ${fmtNum(t.palletsPerHr, 2)}` : '–', 'Units per hour / pallets per hour'),
+    tile(`${fmtNum(t.issues)} <span style="font-size:0.75rem;color:var(--text-dim)">(${fmtNum(t.issueHrs,1)} hrs)</span>`, 'Issues logged · hours lost'),
+    tile(fmtPct(t.attainment, 0), `Picker attainment (${t.pickerCount} people)`),
+  ].join('');
+
+  // staff and hours by shift
+  const n = src.staffing.length || 1;
+  const sum = k => src.staffing.reduce((a, r) => a + (r[k] || 0), 0);
+  const shiftRows = [
+    ['AM', sum('am_count')/n, sum('am_actual'), sum('am_ot')],
+    ['PM', sum('pm_count')/n, sum('pm_actual'), sum('pm_ot')],
+    ['Night', sum('night_count')/n, sum('night_actual'), sum('night_ot')],
+    ['Agency', sum('agency_count')/n, sum('agency_hours'), null],
+    ['Salaried', sum('salaried_count')/n, sum('salaried_hours'), null],
+  ];
+  const paid = `Not worked: ${fmtNum(sum('holiday_hours'),1)} holiday hrs, ${fmtNum(sum('sick_hours'),1)} sick hrs`;
+  document.getElementById('modalShifts').innerHTML = src.staffing.length ? `
+    <table class="data"><thead><tr><th>Group</th><th class="num">${single ? 'People' : 'Avg people / day'}</th><th class="num">Hours worked</th><th class="num">Overtime</th></tr></thead><tbody>
+    ${shiftRows.map(r => `<tr><td>${r[0]}</td><td class="num">${fmtNum(r[1], single ? 0 : 1)}</td><td class="num">${fmtNum(r[2],1)}</td><td class="num">${r[3] === null ? '–' : fmtNum(r[3],1)}</td></tr>`).join('')}
+    </tbody></table><p class="hint-click">${paid}</p>` : '<p class="desc">No staffing data for this period.</p>';
+
+  // customers
+  const cust = {};
+  src.orders.forEach(o => Object.entries(o.customers).forEach(([name, v]) => { cust[name] = (cust[name] || 0) + v.pallets; }));
+  const custs = Object.entries(cust).sort((a,b) => b[1] - a[1]);
+  const maxP = Math.max(...custs.map(c => c[1]), 1);
+  document.getElementById('modalCustomers').innerHTML = custs.map(c => `<div class="bar-row"><div class="name">${esc(c[0])}</div><div class="track"><div class="fill" style="width:${c[1]/maxP*100}%; background:${getCss('--teal')}"></div></div><div class="val">${fmtNum(c[1])} plt</div></div>`).join('') || '<p class="desc">No order data for this period.</p>';
+
+  // issues
+  document.getElementById('modalEventsTitle').textContent = single ? 'Issues logged this day' : 'Issues logged in this period';
+  let evHtml = '<p class="desc">No issues logged.</p>';
+  if (src.events.length) {
+    if (single) {
+      evHtml = src.events.map(ev => `<div class="evt-item"><div class="meta">${esc(ev.time||'')} · ${esc(ev.type)} · ${ev.duration}h · ${fmtNum(ev.headcount_affected)} people · ${esc(ev.reporter_disp)}</div>${esc(ev.comments)}</div>`).join('');
+    } else {
+      const byType = {};
+      src.events.forEach(ev => { byType[ev.type] = byType[ev.type] || {count:0, dur:0}; byType[ev.type].count++; byType[ev.type].dur += ev.duration; });
+      const types = Object.entries(byType).sort((a,b) => b[1].dur - a[1].dur);
+      const maxD = Math.max(...types.map(x => x[1].dur), 0.001);
+      evHtml = types.map(x => `<div class="bar-row"><div class="name">${esc(x[0])}</div><div class="track"><div class="fill" style="width:${x[1].dur/maxD*100}%; background:${getCss('--red')}"></div></div><div class="val">${x[1].dur.toFixed(1)}h / ${x[1].count}</div></div>`).join('');
+      const longest = src.events.slice().sort((a,b) => b.duration - a.duration).slice(0, 8);
+      evHtml += '<p class="hint-click">Longest individual issues:</p>' + longest.map(ev => `<div class="evt-item"><div class="meta">${fmtDate(ev.date)} ${esc(ev.time||'')} · ${esc(ev.type)} · ${ev.duration}h · ${esc(ev.reporter_disp)}</div>${esc(ev.comments)}</div>`).join('');
+    }
+  }
+  document.getElementById('modalEvents').innerHTML = evHtml;
+
+  // shortages
+  document.getElementById('modalShortagesTitle').textContent = single ? 'Shortages this day' : 'Most-shorted products in this period';
+  let shortHtml = '<p class="desc">No shortages recorded.</p>';
+  if (src.shortages.length) {
+    if (single) {
+      shortHtml = src.shortages.slice().sort((a,b) => b.qty_shorted_cases - a.qty_shorted_cases).map(r => `<div class="evt-item"><div class="meta">${esc(r.customer)} · ${esc(r.depot)} · ${esc(r.delivery_note||'')}</div>${esc(r.product_name)} — <strong>${fmtNum(r.qty_shorted_cases)} of ${fmtNum(r.qty_order_cases)} cases short</strong></div>`).join('');
+    } else {
+      const byP = {};
+      src.shortages.forEach(r => { byP[r.product_name] = byP[r.product_name] || {cases:0, lines:0}; byP[r.product_name].cases += r.qty_shorted_cases; byP[r.product_name].lines++; });
+      const top = Object.entries(byP).sort((a,b) => b[1].cases - a[1].cases).slice(0, 10);
+      const maxC = Math.max(...top.map(x => x[1].cases), 1);
+      shortHtml = top.map(x => `<div class="bar-row"><div class="name" title="${esc(x[0])}">${esc(x[0])}</div><div class="track"><div class="fill" style="width:${x[1].cases/maxC*100}%; background:${getCss('--red')}"></div></div><div class="val">${fmtNum(x[1].cases)} cs</div></div>`).join('');
+    }
+  }
+  document.getElementById('modalShortages').innerHTML = shortHtml;
+
+  // pickers
+  document.getElementById('modalPickersTitle').textContent = single ? 'Pickers working this day' : 'Top pickers in this period';
+  const pk = aggregatePickers(src.picks).sort((a,b) => b.actual - a.actual).slice(0, single ? 40 : 10);
+  document.getElementById('modalPickers').innerHTML = pk.length ? `
+    <table class="data"><thead><tr><th>Name</th><th>Shift</th><th class="num">Actual</th><th class="num">Target</th><th class="num">Attainment</th></tr></thead><tbody>
+    ${pk.map(r => `<tr><td>${esc(r.name)}</td><td><span class="pill ${pillClass(r)}">${esc(r.agency ? 'AGENCY' : r.shift)}</span></td><td class="num">${fmtNum(r.actual)}</td><td class="num">${fmtNum(r.target)}</td><td class="num">${r.target ? r.attainment.toFixed(0) + '%' : '–'}</td></tr>`).join('')}
+    </tbody></table>` : '<p class="desc">No picker data for this period.</p>';
+
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+
+/* ============ Tabs / presets ============ */
+function setTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tabpanel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+  renderActiveTab();
+}
+function renderActiveTab() {
+  if (state.tab === 'overview') renderOverview();
+  else if (state.tab === 'fulfilment') renderFulfilment();
+  else if (state.tab === 'labour') renderLabour();
+  else if (state.tab === 'issues') renderIssues();
+  else if (state.tab === 'shortages') renderShortages();
+  else if (state.tab === 'pickers') renderPickers();
+}
+function renderAll() { renderKPIs(); renderActiveTab(); }
+
+function buildPresets() {
+  const months = new Set();
+  ['staffing','orders','events','picks','shortages'].forEach(c => (DATA[c] || []).forEach(r => { if (r.date) months.add(r.date.slice(0,7)); }));
+  const container = document.getElementById('presetsContainer');
+  container.innerHTML = [...months].sort().map(ym => {
+    const [, m] = ym.split('-').map(Number);
+    return `<button data-preset="${ym}">${MONTH_NAMES[m-1].slice(0,3)} ${ym.slice(0,4)}</button>`;
+  }).join('') + `<button data-preset="all" class="active">All data</button>`;
+  container.querySelectorAll('button').forEach(b => b.addEventListener('click', () => setPreset(b.dataset.preset)));
+}
+function setPreset(preset) {
+  document.querySelectorAll('.presets button[data-preset]').forEach(b => b.classList.toggle('active', b.dataset.preset === preset));
+  if (preset === 'all') { state.start = DATA_BOUNDS.min; state.end = DATA_BOUNDS.max; }
+  else { [state.start, state.end] = monthRange(preset); }
+  document.getElementById('startDate').value = state.start;
+  document.getElementById('endDate').value = state.end;
+  renderAll();
+}
+function updateDataBadge() {
+  const badge = document.getElementById('dataBadge');
+  badge.textContent = DATA_SOURCE === 'repo' ? 'Repository data' : DATA_SOURCE === 'upload' ? 'Uploaded data' : 'No data';
+  badge.classList.toggle('demo', DATA_SOURCE === 'none');
+}
+function refreshDateInputs() {
+  ['startDate','endDate'].forEach(id => { const el = document.getElementById(id); el.min = DATA_BOUNDS.min; el.max = DATA_BOUNDS.max; });
+  document.getElementById('startDate').value = state.start;
+  document.getElementById('endDate').value = state.end;
+}
+function applyData() {
+  DATA_BOUNDS = computeBounds(DATA);
+  state.start = DATA_BOUNDS.min; state.end = DATA_BOUNDS.max;
+  state.pickerFilter.month = 'all'; state.pickerFilter.week = 'all'; state.shortageFilter.limit = 200;
+  refreshDateInputs();
+  buildPresets();
+  updateDataBadge();
+  populateIssueFilters();
+  populateShortageFilters();
+  populatePickerFilters();
+  renderAll();
+}
+
+/* ============ Excel parsing ============ */
+function excelSerialToDate(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  if (typeof v === 'string') {
+    const m1 = v.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})$/);
+    if (m1) { const d = new Date(Number(m1[3]), Number(m1[2])-1, Number(m1[1])); return isNaN(d.getTime()) ? null : d; }
+    const m2 = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m2) { const d = new Date(Number(m2[1]), Number(m2[2])-1, Number(m2[3])); return isNaN(d.getTime()) ? null : d; }
+    return null;
+  }
+  return null;
+}
+function toDateStr(v) { const d = excelSerialToDate(v); return d ? ymd(d) : null; }
+function sheetAoA(wb, name) {
+  const sheet = wb.Sheets[name];
+  if (!sheet) return null;
+  return XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+}
+function readWorkbook(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => { try { resolve(XLSX.read(e.target.result, { type: 'array', cellDates: true })); } catch (err) { reject(err); } };
+    reader.onerror = () => reject(new Error('Could not read the file.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+function parseStaffing(wb) {
+  const rows = sheetAoA(wb, 'Staffing 2026');
+  if (!rows) throw new Error('No "Staffing 2026" sheet found in this workbook.');
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]; if (!r) continue;
+    const date = toDateStr(r[3]);
+    if (!date) continue;
+    out.push({
+      date, day: r[4],
+      am_count: r[5]||0, am_planned: r[6]||0, am_ot: r[7]||0, am_actual: r[8]||0,
+      pm_count: r[9]||0, pm_planned: r[10]||0, pm_ot: r[11]||0, pm_actual: r[12]||0,
+      night_count: r[13]||0, night_planned: r[14]||0, night_ot: r[15]||0, night_actual: r[16]||0,
+      total_count: r[17]||0, total_planned: r[18]||0, total_actual_hours: r[19]||0, total_overtime: r[20]||0,
+      salaried_count: r[21]||0, salaried_hours: r[22]||0,
+      holiday_count: r[23]||0, holiday_hours: r[24]||0,
+      sick_count: r[25]||0, sick_hours: r[26]||0,
+      agency_count: r[27]||0, agency_hours: r[28]||0,
+      total_hours: r[29]||0,
+    });
+  }
+  return out;
+}
+function parseOrders(wb) {
+  const rows = sheetAoA(wb, 'Orders & Pallets');
+  if (!rows) throw new Error('No "Orders & Pallets" sheet found in this workbook.');
+  const header = rows[0] || [];
+  const customers = [];
+  for (let i = 1; i < header.length; i++) {
+    if (header[i] !== null && header[i] !== undefined && header[i] !== '') {
+      customers.push({ name: String(header[i]).trim(), qi: i, pi: i + 1 });
+      i++;
+    }
+  }
+  const out = [];
+  for (let ri = 2; ri < rows.length; ri++) {
+    const r = rows[ri]; if (!r) continue;
+    const date = toDateStr(r[0]);
+    if (!date) continue;
+    const entry = { date, customers: {} };
+    customers.forEach(c => {
+      if (c.name === 'Total') return;
+      const q = r[c.qi], p = r[c.pi];
+      if (q || p) entry.customers[c.name] = { qty: q || 0, pallets: p || 0 };
+    });
+    const totalCol = customers[customers.length - 1];
+    entry.total_qty = (totalCol ? r[totalCol.qi] : 0) || 0;
+    entry.total_pallets = (totalCol ? r[totalCol.pi] : 0) || 0;
+    out.push(entry);
+  }
+  return out;
+}
+function normReporters(raw) {
+  if (!raw) return { list: [], disp: '' };
+  const parts = String(raw).split(/[\/,]/).map(p => p.trim()).filter(Boolean).map(p => p.toUpperCase());
+  return { list: parts, disp: parts.join(' / ') };
+}
+function parseEvents(wb) {
+  const rows = sheetAoA(wb, 'Daily Events');
+  if (!rows) throw new Error('No "Daily Events" sheet found in this workbook.');
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]; if (!r) continue;
+    const date = toDateStr(r[1]);
+    if (!date) continue;
+    let timeStr = null;
+    const tv = r[3];
+    if (tv instanceof Date && !isNaN(tv.getTime())) timeStr = `${pad(tv.getHours())}:${pad(tv.getMinutes())}`;
+    else if (typeof tv === 'string' && /^\d{1,2}:\d{2}/.test(tv)) timeStr = tv;
+    const reps = normReporters(r[7]);
+    out.push({
+      sno: r[0], date, type: (r[2]||'').toString().trim(), time: timeStr,
+      duration: Number(r[4])||0, headcount_affected: r[5]||0,
+      comments: (r[6]||'').toString().trim(), reporters: reps.list, reporter_disp: reps.disp, overtime: r[8]||0,
+    });
+  }
+  return out;
+}
+// Agency workers are recognised by "agency" or a standalone "AG" in the name, e.g. "AG (Moin)", "ag ashish", "Rohit AG"
+const AGENCY_RE = /agency|(^|[^a-z])ag([^a-z]|$)/i;
+function parsePickers(wb) {
+  const shiftRows = sheetAoA(wb, 'Sheet1') || [];
+  const shiftLookup = {};
+  for (let i = 1; i < shiftRows.length; i++) {
+    const r = shiftRows[i]; if (!r || !r[0]) continue;
+    shiftLookup[String(r[0]).trim().toLowerCase()] = r[1];
+  }
+  const rows = sheetAoA(wb, 'Master data');
+  if (!rows) throw new Error('No "Master data" sheet found in this workbook.');
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]; if (!r) continue;
+    const date = toDateStr(r[0]);
+    if (!date) continue;
+    const name = (r[1]||'').toString().trim();
+    if (!name || name === '(blank)') continue;
+    const isAgency = AGENCY_RE.test(name);
+    let shift = (r[4] && r[4] !== '#N/A') ? r[4] : null;
+    if (!shift) shift = shiftLookup[name.toLowerCase()] || 'Unknown';
+    if (isAgency) shift = 'Agency';
+    out.push({ date, name, actual: r[2]||0, target: r[3]||0, shift, agency: isAgency });
+  }
+  return out;
+}
+function shortageDateStr(v) {
+  if (typeof v === 'number' && isFinite(v) && v > 20000 && v < 80000 && typeof XLSX !== 'undefined' && XLSX.SSF) {
+    const p = XLSX.SSF.parse_date_code(v);            // plain Excel serial number (file saved without a date format)
+    return p ? `${p.y}-${pad(p.m)}-${pad(p.d)}` : null;
+  }
+  return toDateStr(v);
+}
+function parseShortages(wb) {
+  // Prefer the sheet called "Export", otherwise use any sheet that has a Delivery Date + Quantity Shorted header.
+  const norm = v => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const looksRight = rows => rows && rows.slice(0, 15).some(r => r && r.some(c => norm(c) === 'delivery date') && r.some(c => /quantity shorted|qty shorted/.test(norm(c))));
+  let rows = sheetAoA(wb, 'Export');
+  if (!looksRight(rows)) {
+    rows = null;
+    for (const name of wb.SheetNames) { const r = sheetAoA(wb, name); if (looksRight(r)) { rows = r; break; } }
+  }
+  if (!rows) throw new Error('No sheet with "Delivery Date" and "Quantity Shorted" columns was found in this workbook.');
+  const hi = rows.findIndex(r => r && r.some(c => norm(c) === 'delivery date'));
+  const head = rows[hi].map(norm);
+  const col = (re, fallback) => { const i = head.findIndex(h => re.test(h)); return i >= 0 ? i : fallback; };
+  const C = {
+    date:  col(/^delivery date$/, 0),
+    cust:  col(/^customer/, 1),
+    depot: col(/^depot/, 2),
+    code:  col(/^product code/, 3),
+    name:  col(/^product name/, 4),
+    dn:    col(/^delivery note/, 5),
+    size:  col(/case.*size|pack.*size/, 6),
+    ordU:  col(/^quantity order$|^qty order$/, 7),
+    ordC:  col(/^quantity order .*case|^qty order .*case/, 8),
+    short: col(/^quantity shorted|^qty shorted/, 9),
+  };
+  const out = [];
+  for (let i = hi + 1; i < rows.length; i++) {
+    const r = rows[i]; if (!r) continue;
+    const date = shortageDateStr(r[C.date]);
+    if (!date) continue;
+    const caseSize = Number(r[C.size]) || 1;
+    const shortedCases = Number(r[C.short]) || 0;
+    out.push({
+      date, customer: (r[C.cust]||'').toString().trim(), depot: (r[C.depot]||'').toString().trim(),
+      product_code: r[C.code], product_name: (r[C.name]||'').toString().trim(), delivery_note: r[C.dn],
+      case_size: caseSize, qty_order_units: Number(r[C.ordU])||0, qty_order_cases: Number(r[C.ordC])||0,
+      qty_shorted_cases: shortedCases, qty_shorted_units: shortedCases * caseSize,
+    });
+  }
+  return out;
+}
+
+/* ============ Load from the repository (automatic) ============ */
+const SLOTS = [
+  { key: 'hours',     input: 'fileHours',     parsers: [['staffing', parseStaffing], ['orders', parseOrders]] },
+  { key: 'events',    input: 'fileEvents',    parsers: [['events', parseEvents]] },
+  { key: 'pickers',   input: 'filePickers',   parsers: [['picks', parsePickers]] },
+  { key: 'shortages', input: 'fileShortages', parsers: [['shortages', parseShortages]] },
+];
+async function fetchWorkbook(paths) {
+  const list = Array.isArray(paths) ? paths : [paths];
+  const misses = [];
+  for (const path of list) {
+    let res;
+    try { res = await fetch(encodeURI(path) + '?v=' + Date.now(), { cache: 'no-store' }); }
+    catch (err) { misses.push(path + ' (' + err.message + ')'); continue; }
+    if (!res.ok) { misses.push(path + ' (HTTP ' + res.status + ')'); continue; }
+    try { return XLSX.read(await res.arrayBuffer(), { type: 'array', cellDates: true }); }
+    catch (err) { throw new Error(path + ' was found but could not be read: ' + err.message); }
+  }
+  throw new Error('Not found: ' + misses.join(', '));
+}
+function setRepoStatus(cls, msg) {
+  const el = document.getElementById('repoStatus');
+  el.className = 'repo-status datasrc-status ' + cls;
+  el.textContent = msg;
+}
+async function loadFromRepository() {
+  const panel = document.getElementById('datasrcPanel');
+  setRepoStatus('busy', 'Loading data from repository…');
+  const loaded = [], errors = [];
+  for (const slot of SLOTS) {
+    const path = REPO_FILES[slot.key];
+    delete LOAD_ERR[slot.key];
+    try {
+      const wb = await fetchWorkbook(path);
+      for (const [cat, parser] of slot.parsers) { DATA[cat] = parser(wb); loaded.push(`${cat} (${DATA[cat].length})`); }
+    } catch (err) { errors.push(err.message); LOAD_ERR[slot.key] = err.message; }
+  }
+  if (loaded.length) { DATA_SOURCE = 'repo'; applyData(); } else { renderActiveTab(); }
+  if (!loaded.length) {
+    panel.style.display = ''; panel.setAttribute('open', '');
+    setRepoStatus('err', 'Could not load the files from the repository: ' + errors.join(' · ') + '. You can select them manually below.');
+  } else if (errors.length) {
+    panel.style.display = '';
+    setRepoStatus('err', 'Loaded ' + loaded.join(', ') + '. Could not load: ' + errors.join(' · '));
+  } else {
+    panel.style.display = 'none'; panel.removeAttribute('open');
+    setRepoStatus('ok', 'Loaded from repository: ' + loaded.join(', '));
+  }
+}
+
+/* ============ Manual upload (fallback only) ============ */
+async function handleProcessFiles() {
+  const statusEl = document.getElementById('datasrcStatus');
+  const btn = document.getElementById('processFilesBtn');
+  const todo = SLOTS.filter(s => document.getElementById(s.input).files.length);
+  if (!todo.length) { statusEl.textContent = 'Choose at least one file to load.'; statusEl.className = 'datasrc-status err'; return; }
+  btn.disabled = true;
+  statusEl.className = 'datasrc-status busy'; statusEl.textContent = 'Reading and parsing…';
+  const loaded = [], errors = [];
+  for (const slot of todo) {
+    const file = document.getElementById(slot.input).files[0];
+    delete LOAD_ERR[slot.key];
+    try {
+      const wb = await readWorkbook(file);
+      for (const [cat, parser] of slot.parsers) { DATA[cat] = parser(wb); loaded.push(`${cat} (${DATA[cat].length} rows)`); }
+    } catch (err) { errors.push(`${file.name}: ${err.message}`); LOAD_ERR[slot.key] = `${file.name}: ${err.message}`; }
+  }
+  if (loaded.length) { DATA_SOURCE = 'upload'; applyData(); }
+  btn.disabled = false;
+  if (errors.length) { statusEl.className = 'datasrc-status err'; statusEl.textContent = `Loaded: ${loaded.join(', ') || 'nothing'}. Problems: ${errors.join(' · ')}`; }
+  else { statusEl.className = 'datasrc-status ok'; statusEl.textContent = `Loaded ${loaded.join(', ')}.`; }
+}
+
+/* ============ Init ============ */
+function init() {
+  refreshDateInputs();
+  document.getElementById('startDate').addEventListener('change', e => { state.start = e.target.value; document.querySelectorAll('.presets button[data-preset]').forEach(b => b.classList.remove('active')); renderAll(); });
+  document.getElementById('endDate').addEventListener('change', e => { state.end = e.target.value; document.querySelectorAll('.presets button[data-preset]').forEach(b => b.classList.remove('active')); renderAll(); });
+  document.querySelectorAll('.tabbar button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  buildPresets();
+  updateDataBadge();
+
+  document.querySelectorAll('#granButtons button').forEach(b => b.addEventListener('click', () => { state.gran = b.dataset.gran; renderFulfilment(); }));
+
+  document.getElementById('processFilesBtn').addEventListener('click', handleProcessFiles);
+  document.getElementById('retryRepoBtn').addEventListener('click', loadFromRepository);
+  [['fileHours','fileHoursName'],['fileEvents','fileEventsName'],['filePickers','filePickersName'],['fileShortages','fileShortagesName']].forEach(([i, n]) => {
+    document.getElementById(i).addEventListener('change', e => { document.getElementById(n).textContent = e.target.files.length ? e.target.files[0].name : ''; });
+  });
+
+  populateIssueFilters();
+  document.getElementById('issueTypeFilter').addEventListener('change', e => { state.issueFilter.type = e.target.value; renderIssues(); });
+  document.getElementById('issueReporterFilter').addEventListener('change', e => { state.issueFilter.reporter = e.target.value; renderIssues(); });
+  document.getElementById('issueSearch').addEventListener('input', e => { state.issueFilter.q = e.target.value; renderIssues(); });
+
+  populateShortageFilters();
+  document.getElementById('shortageCustomerFilter').addEventListener('change', e => { state.shortageFilter.customer = e.target.value; state.shortageFilter.limit = 200; renderShortageTable(); });
+  document.getElementById('shortageSearch').addEventListener('input', e => { state.shortageFilter.q = e.target.value; state.shortageFilter.limit = 200; renderShortageTable(); });
+
+  populatePickerFilters();
+  document.getElementById('pickerShiftFilter').addEventListener('change', e => { state.pickerFilter.shift = e.target.value; renderPickers(); });
+  document.getElementById('pickerAgencyFilter').addEventListener('change', e => { state.pickerFilter.agency = e.target.value; renderPickers(); });
+  document.getElementById('pickerSearch').addEventListener('input', e => { state.pickerFilter.q = e.target.value; renderPickers(); });
+  document.getElementById('pickerMonthFilter').addEventListener('change', e => { state.pickerFilter.month = e.target.value; state.pickerFilter.week = 'all'; renderPickers(); });
+  document.getElementById('pickerWeekFilter').addEventListener('change', e => { state.pickerFilter.week = e.target.value; renderPickers(); });
+  document.querySelectorAll('#pickerTable th[data-key]').forEach(th => th.addEventListener('click', () => sortPickers(th.dataset.key)));
+
+  document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target.id === 'modalOverlay') closeModal(); });
+  document.querySelector('.modal .close').addEventListener('click', closeModal);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  renderAll();
+  updateSortArrows();
+}
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    if (typeof Chart === 'undefined') throw new Error('Chart.js failed to load from CDN.');
+    if (typeof XLSX === 'undefined') throw new Error('SheetJS (xlsx) failed to load from CDN.');
+    init();
+    await loadFromRepository();
+  } catch (err) {
+    document.querySelector('.wrap').insertAdjacentHTML('afterbegin',
+      `<div style="background:#3a1f1f;border:1px solid #6b3330;color:#f3d4d1;padding:14px 18px;border-radius:8px;margin-bottom:18px;font-size:0.85rem;">
+        Dashboard failed to initialize: ${esc(err.message)}
+      </div>`);
+    console.error(err);
+  }
+});
+
+</script>
+</body>
+</html>
