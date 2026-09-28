@@ -1377,7 +1377,10 @@ function renderPickers() {
   const ranked = rows.filter(r => r.target > 0).sort((a, b) => b.attainment - a.attainment);
   const maxA = Math.max(...ranked.map(r => r.attainment), 100);
   document.getElementById('rankDesc').textContent =
-    `${GROUP_LABELS[f.group]} · ${ranked.length} people · highest to lowest actual-vs-target for the selected period.`;
+    `${GROUP_LABELS[f.group]} · ${ranked.length} people · highest to lowest actual-vs-target for the selected period. ` +
+    `Target = customer order quantity where an order exists, otherwise the tracker target (` +
+    `${fmtNum(ORDER_MATCH.matched)} of ${fmtNum(ORDER_MATCH.total)} picker rows matched to an order` +
+    (ORDER_MATCH.withCustomer === 0 ? '; no Customer column found in the picker tracker' : '') + `).`;
   document.getElementById('rankingList').innerHTML = ranked.map((r, i) => {
     const col = getCss(r.attainment >= 100 ? '--green' : r.attainment >= 85 ? '--amber' : '--red');
     return `<div class="bar-row">
@@ -1568,7 +1571,50 @@ function refreshDateInputs() {
   document.getElementById('startDate').value = state.start;
   document.getElementById('endDate').value = state.end;
 }
+/* ============ Target = order quantity (when the customer has an order that day) ============ */
+const ORDER_MATCH = { withCustomer: 0, matched: 0, total: 0 };
+function normCust(v) { return String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+function applyOrderTargets() {
+  // date -> [{ key: normalised customer name, qty }]
+  const orderMap = {};
+  DATA.orders.forEach(o => {
+    Object.entries(o.customers || {}).forEach(([name, v]) => {
+      if (v && v.qty > 0) (orderMap[o.date] = orderMap[o.date] || []).push({ key: normCust(name), qty: v.qty });
+    });
+  });
+  const findQty = (date, cust) => {
+    const list = orderMap[date]; const k = normCust(cust);
+    if (!list || !k) return null;
+    let hit = list.find(x => x.key === k);                                   // exact match first
+    if (!hit) hit = list.find(x => x.key.includes(k) || k.includes(x.key));  // then partial match
+    return hit ? hit.qty : null;
+  };
+  // Reset, then group pickers by date + customer that have an order quantity
+  const groups = {};
+  ORDER_MATCH.withCustomer = 0; ORDER_MATCH.matched = 0; ORDER_MATCH.total = DATA.picks.length;
+  DATA.picks.forEach(p => {
+    p.target = p.target_orig; p.target_src = 'tracker';
+    if (!p.customer) return;
+    ORDER_MATCH.withCustomer++;
+    const qty = findQty(p.date, p.customer);
+    if (qty === null) return;
+    ORDER_MATCH.matched++;
+    const gk = p.date + '|' + normCust(p.customer);
+    (groups[gk] = groups[gk] || { qty, rows: [] }).rows.push(p);
+  });
+  // The order quantity is one number per customer per day, so it is shared between the pickers
+  // on that customer in proportion to their tracker target (equally if the tracker targets are 0).
+  Object.values(groups).forEach(g => {
+    const sumOrig = g.rows.reduce((a, p) => a + (p.target_orig || 0), 0);
+    g.rows.forEach(p => {
+      p.target = g.qty * (sumOrig > 0 ? (p.target_orig || 0) / sumOrig : 1 / g.rows.length);
+      p.target_src = 'order';
+    });
+  });
+}
+
 function applyData() {
+  applyOrderTargets();
   DATA_BOUNDS = computeBounds(DATA);
   state.start = DATA_BOUNDS.min; state.end = DATA_BOUNDS.max;
   state.pickerFilter.month = 'all'; state.pickerFilter.week = 'all'; state.shortageFilter.limit = 200;
@@ -1696,6 +1742,10 @@ function parsePickers(wb) {
   }
   const rows = sheetAoA(wb, 'Master data');
   if (!rows) throw new Error('No "Master data" sheet found in this workbook.');
+  // Find the customer column by its header (any header containing "customer")
+  const header = rows[0] || [];
+  const custIdx = header.findIndex(h => /customer/i.test(String(h == null ? '' : h)));
+  if (custIdx < 0) console.warn('Picker tracker: no "Customer" column found in Master data. Headers seen:', header);
   const out = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]; if (!r) continue;
@@ -1707,7 +1757,8 @@ function parsePickers(wb) {
     let shift = (r[4] && r[4] !== '#N/A') ? r[4] : null;
     if (!shift) shift = shiftLookup[name.toLowerCase()] || 'Unknown';
     if (isAgency) shift = 'Agency';
-    out.push({ date, name, actual: r[2]||0, target: r[3]||0, shift, agency: isAgency });
+    const customer = custIdx >= 0 ? (r[custIdx] == null ? '' : String(r[custIdx]).trim()) : '';
+    out.push({ date, name, customer, actual: r[2]||0, target: r[3]||0, target_orig: r[3]||0, shift, agency: isAgency });
   }
   return out;
 }
