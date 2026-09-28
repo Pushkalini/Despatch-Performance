@@ -669,20 +669,14 @@ footer.foot {
         <strong style="font-size:0.85rem;">Period</strong>
         <select id="pickerMonthFilter"></select>
         <select id="pickerWeekFilter"></select>
+        <select id="pickerGroupFilter"></select>
         <span class="count" id="pickerPeriodNote" style="margin-left:0;"></span>
       </div>
     </div>
-    <div class="grid cols-2" style="margin-bottom:16px;">
-      <div class="panel">
-        <h3>Top attainment</h3>
-        <p class="desc">Highest actual-vs-target performers in the selected period (min. 3 days worked).</p>
-        <div id="topPerformers"></div>
-      </div>
-      <div class="panel">
-        <h3>Lowest attainment</h3>
-        <p class="desc">Lowest actual-vs-target performers in the selected period (min. 3 days worked) — worth a closer look.</p>
-        <div id="bottomPerformers"></div>
-      </div>
+    <div class="panel" style="margin-bottom:16px;">
+      <h3>Attainment ranking</h3>
+      <p class="desc" id="rankDesc"></p>
+      <div id="rankingList" style="max-height:640px; overflow-y:auto; padding-right:6px;"></div>
     </div>
     <div class="grid cols-2" style="margin-bottom:16px;">
       <div class="panel">
@@ -698,18 +692,12 @@ footer.foot {
     </div>
     <div class="panel" style="margin-bottom:16px;">
       <h3>Attainment by shift</h3>
-      <p class="desc">Combined actual vs target across all people on each shift in the selected period, agency cover shown separately.</p>
+      <p class="desc">Combined actual vs target across all people on each shift (AM, PM, Night) in the selected period. Agency and no-shift people are not included.</p>
       <div class="chart-box h260"><canvas id="shiftAttainChart"></canvas></div>
     </div>
     <div class="panel">
       <h3>Picker leaderboard</h3>
       <div class="filters">
-        <select id="pickerShiftFilter"></select>
-        <select id="pickerAgencyFilter">
-          <option value="all">Permanent + agency</option>
-          <option value="perm">Permanent only</option>
-          <option value="agency">Agency only</option>
-        </select>
         <input type="text" id="pickerSearch" placeholder="Search name…">
         <span class="count" id="pickerCount"></span>
       </div>
@@ -804,7 +792,7 @@ const state = {
   gran: 'day',
   issueFilter: { type: 'all', reporter: 'all', q: '' },
   shortageFilter: { customer: 'all', q: '', limit: 200 },
-  pickerFilter: { shift: 'all', agency: 'all', q: '', month: 'all', week: 'all' },
+  pickerFilter: { group: 'shift', q: '', month: 'all', week: 'all' },
   pickerSort: { key: 'attainment', dir: 'desc' },
 };
 const charts = {};
@@ -1267,12 +1255,23 @@ function renderShortageTable() {
 }
 function showMoreShortages() { state.shortageFilter.limit += 200; renderShortageTable(); }
 
-/* ============ PICKERS TAB (with weekly / monthly filters) ============ */
+/* ============ PICKERS TAB (shift ranking + Others filter) ============ */
+const SHIFT_SET = ['AM', 'PM', 'NIGHT'];
+const GROUP_LABELS = {
+  shift: 'Shift staff (AM / PM / Night)',
+  AM: 'AM shift',
+  PM: 'PM shift',
+  NIGHT: 'Night shift',
+  others: 'Others (agency / no shift)',
+};
+function shiftOf(p) { return String(p.shift || '').toUpperCase(); }
+function hasShift(p) { return !p.agency && SHIFT_SET.includes(shiftOf(p)); }
+function shiftLabel(r) { return r.agency ? 'AGENCY' : (hasShift(r) ? shiftOf(r) : 'NO SHIFT'); }
+
 function populatePickerFilters() {
-  const shifts = [...new Set(DATA.picks.map(p => p.shift))].sort();
-  const s = document.getElementById('pickerShiftFilter');
-  s.innerHTML = '<option value="all">All shifts</option>' + shifts.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
-  s.value = state.pickerFilter.shift;
+  const g = document.getElementById('pickerGroupFilter');
+  g.innerHTML = Object.entries(GROUP_LABELS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  g.value = state.pickerFilter.group;
 }
 function populatePickerPeriodFilters() {
   const f = state.pickerFilter;
@@ -1298,9 +1297,9 @@ function getPickerPicks() {
 }
 function applyRowFilters(picks) {
   const f = state.pickerFilter;
-  if (f.shift !== 'all') picks = picks.filter(p => p.shift === f.shift);
-  if (f.agency === 'perm') picks = picks.filter(p => !p.agency);
-  if (f.agency === 'agency') picks = picks.filter(p => p.agency);
+  if (f.group === 'shift') picks = picks.filter(hasShift);
+  else if (SHIFT_SET.includes(f.group)) picks = picks.filter(p => hasShift(p) && shiftOf(p) === f.group);
+  else if (f.group === 'others') picks = picks.filter(p => !hasShift(p));
   if (f.q) { const q = f.q.toLowerCase(); picks = picks.filter(p => p.name.toLowerCase().includes(q)); }
   return picks;
 }
@@ -1320,9 +1319,10 @@ function buildLeaderboard() {
 }
 function pillClass(r) {
   if (r.agency) return 'agency';
-  if (r.shift === 'AM') return 'am';
-  if (r.shift === 'PM') return 'pm';
-  if (r.shift === 'NIGHT') return 'night';
+  const s = shiftOf(r);
+  if (s === 'AM') return 'am';
+  if (s === 'PM') return 'pm';
+  if (s === 'NIGHT') return 'night';
   return 'unknown';
 }
 function attainByPeriod(picks, gran) {
@@ -1365,7 +1365,7 @@ function renderPickers() {
   document.getElementById('pickerTableBody').innerHTML = rows.map(r => `
     <tr>
       <td>${esc(r.name)}</td>
-      <td><span class="pill ${pillClass(r)}">${esc(r.agency ? 'AGENCY' : r.shift)}</span></td>
+      <td><span class="pill ${pillClass(r)}">${esc(shiftLabel(r))}</span></td>
       <td class="num">${r.days}</td>
       <td class="num">${fmtNum(r.actual)}</td>
       <td class="num">${fmtNum(r.target)}</td>
@@ -1373,27 +1373,37 @@ function renderPickers() {
       <td class="num" style="color:${r.attainment>=100?getCss('--green'):r.attainment>=85?getCss('--amber'):getCss('--red')}; font-weight:600;">${r.attainment.toFixed(0)}%</td>
     </tr>`).join('');
 
-  const eligible = rows.filter(r => r.days >= 3 && r.target > 0);
-  const top = eligible.slice().sort((a,b) => b.attainment - a.attainment).slice(0,8);
-  const bottom = eligible.slice().sort((a,b) => a.attainment - b.attainment).slice(0,8);
-  const maxA = Math.max(...top.map(t => t.attainment), 100);
-  document.getElementById('topPerformers').innerHTML = top.map(r => `
-    <div class="bar-row"><div class="name">${esc(r.name)}</div><div class="track"><div class="fill" style="width:${Math.min(100, r.attainment/maxA*100)}%; background:${getCss('--green')}"></div></div><div class="val">${r.attainment.toFixed(0)}%</div></div>`).join('') || '<p class="desc">Not enough data in this period.</p>';
-  document.getElementById('bottomPerformers').innerHTML = bottom.map(r => `
-    <div class="bar-row"><div class="name">${esc(r.name)}</div><div class="track"><div class="fill" style="width:${Math.min(100, r.attainment/maxA*100)}%; background:${getCss('--red')}"></div></div><div class="val">${r.attainment.toFixed(0)}%</div></div>`).join('') || '<p class="desc">Not enough data in this period.</p>';
+  // Full ranking, highest to lowest
+  const ranked = rows.filter(r => r.target > 0).sort((a, b) => b.attainment - a.attainment);
+  const maxA = Math.max(...ranked.map(r => r.attainment), 100);
+  document.getElementById('rankDesc').textContent =
+    `${GROUP_LABELS[f.group]} · ${ranked.length} people · highest to lowest actual-vs-target for the selected period.`;
+  document.getElementById('rankingList').innerHTML = ranked.map((r, i) => {
+    const col = getCss(r.attainment >= 100 ? '--green' : r.attainment >= 85 ? '--amber' : '--red');
+    return `<div class="bar-row">
+      <div class="name" style="width:210px" title="${esc(r.name)}"><span class="mono" style="color:var(--text-faint)">${i + 1}.</span> ${esc(r.name)}</div>
+      <div style="width:64px; flex-shrink:0;"><span class="pill ${pillClass(r)}">${esc(shiftLabel(r))}</span></div>
+      <div class="track"><div class="fill" style="width:${Math.min(100, r.attainment / maxA * 100)}%; background:${col}"></div></div>
+      <div class="val">${r.attainment.toFixed(0)}%</div>
+    </div>`;
+  }).join('') || '<p class="desc">No data in this period.</p>';
 
   drawAttainChart('weeklyAttainChart', 'weeklyAttain', 'week');
   drawAttainChart('monthlyAttainChart', 'monthlyAttain', 'month');
 
+  // Attainment by shift: AM / PM / Night only (agency and no-shift excluded)
   const byShift = {};
-  getPickerPicks().forEach(p => { const k = p.agency ? 'Agency' : p.shift; byShift[k] = byShift[k] || {actual:0, target:0}; byShift[k].actual += p.actual; byShift[k].target += p.target; });
-  const shiftEntries = Object.entries(byShift).filter(e => e[1].target > 0);
+  getPickerPicks().filter(hasShift).forEach(p => {
+    const k = shiftOf(p); byShift[k] = byShift[k] || {actual:0, target:0};
+    byShift[k].actual += p.actual; byShift[k].target += p.target;
+  });
+  const shiftEntries = SHIFT_SET.filter(k => byShift[k] && byShift[k].target > 0).map(k => [k, byShift[k]]);
   destroyChart('shiftAttain');
   charts.shiftAttain = new Chart(document.getElementById('shiftAttainChart'), {
     type:'bar',
     data:{ labels: shiftEntries.map(e => e[0]), datasets:[{ label:'Attainment %', data: shiftEntries.map(e => e[1].actual / e[1].target * 100), backgroundColor: hexA(getCss('--violet'),0.8), borderRadius:3 }]},
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-      scales:{ y:{ title:{display:true,text:'Attainment %',font:{size:10}} } } }
+      scales:{ y:{ beginAtZero:true, title:{display:true,text:'Attainment %',font:{size:10}} } } }
   });
 }
 function sortPickers(key) {
@@ -1506,7 +1516,7 @@ function openPeriodModal(key, gran) {
   const pk = aggregatePickers(src.picks).sort((a,b) => b.actual - a.actual).slice(0, single ? 40 : 10);
   document.getElementById('modalPickers').innerHTML = pk.length ? `
     <table class="data"><thead><tr><th>Name</th><th>Shift</th><th class="num">Actual</th><th class="num">Target</th><th class="num">Attainment</th></tr></thead><tbody>
-    ${pk.map(r => `<tr><td>${esc(r.name)}</td><td><span class="pill ${pillClass(r)}">${esc(r.agency ? 'AGENCY' : r.shift)}</span></td><td class="num">${fmtNum(r.actual)}</td><td class="num">${fmtNum(r.target)}</td><td class="num">${r.target ? r.attainment.toFixed(0) + '%' : '–'}</td></tr>`).join('')}
+    ${pk.map(r => `<tr><td>${esc(r.name)}</td><td><span class="pill ${pillClass(r)}">${esc(shiftLabel(r))}</span></td><td class="num">${fmtNum(r.actual)}</td><td class="num">${fmtNum(r.target)}</td><td class="num">${r.target ? r.attainment.toFixed(0) + '%' : '–'}</td></tr>`).join('')}
     </tbody></table>` : '<p class="desc">No picker data for this period.</p>';
 
   document.getElementById('modalOverlay').classList.add('open');
@@ -1850,8 +1860,7 @@ function init() {
   document.getElementById('shortageSearch').addEventListener('input', e => { state.shortageFilter.q = e.target.value; state.shortageFilter.limit = 200; renderShortageTable(); });
 
   populatePickerFilters();
-  document.getElementById('pickerShiftFilter').addEventListener('change', e => { state.pickerFilter.shift = e.target.value; renderPickers(); });
-  document.getElementById('pickerAgencyFilter').addEventListener('change', e => { state.pickerFilter.agency = e.target.value; renderPickers(); });
+  document.getElementById('pickerGroupFilter').addEventListener('change', e => { state.pickerFilter.group = e.target.value; renderPickers(); });
   document.getElementById('pickerSearch').addEventListener('input', e => { state.pickerFilter.q = e.target.value; renderPickers(); });
   document.getElementById('pickerMonthFilter').addEventListener('change', e => { state.pickerFilter.month = e.target.value; state.pickerFilter.week = 'all'; renderPickers(); });
   document.getElementById('pickerWeekFilter').addEventListener('change', e => { state.pickerFilter.week = e.target.value; renderPickers(); });
